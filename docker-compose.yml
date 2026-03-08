@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  hsq-db:
+    image: postgres:16-alpine
+    container_name: hsq-db
+    environment:
+      POSTGRES_USER: "hsq_admin"
+      POSTGRES_PASSWORD: "HsqSecure2026"
+      POSTGRES_DB: "hsq_portal"
+    volumes:
+      - hsq-pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hsq_admin -d hsq_portal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  hsq-api:
+    build: ./api
+    container_name: hsq-api
+    environment:
+      DATABASE_URL: "postgresql://hsq_admin:HsqSecure2026@hsq-db:5432/hsq_portal"
+      TRACCAR_URL: "http://72.61.129.78:8082"
+      TRACCAR_ADMIN_EMAIL: "admin@hsqrastreamento.com"
+      TRACCAR_ADMIN_PASSWORD: "HSQ@2026Admin!"
+      JWT_SECRET: "hsq-jwt-secret-2026-prod"
+      CORS_ORIGIN: "*"
+      PORT: "4080"
+    depends_on:
+      hsq-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  hsq-web:
+    build: ./web
+    container_name: hsq-web
+    ports:
+      - "3080:80"
+    depends_on:
+      - hsq-api
+    restart: unless-stopped
+
+
+volumes:
+  hsq-pgdata:
