@@ -278,4 +278,40 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// DELETE /api/admin/clients/:id - Delete client permanently
+router.delete('/clients/:id', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const result = await db.query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente nao encontrado' });
+    }
+
+    const client = result.rows[0];
+
+    // Delete from Traccar first
+    if (client.traccar_user_id) {
+      try {
+        const traccar = new TraccarService(req.app.locals.traccarUrl);
+        await traccar.deleteUser(client.traccar_user_id);
+      } catch (e) {
+        console.error('Traccar delete failed:', e.message);
+      }
+    }
+
+    // Delete from portal DB
+    await db.query('DELETE FROM clients WHERE id = $1', [req.params.id]);
+
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      ['admin', req.user.id, 'client_deleted', JSON.stringify({ clientId: req.params.id, name: client.name })]
+    );
+
+    res.json({ message: 'Cliente deletado permanentemente' });
+  } catch (err) {
+    console.error('Delete client error:', err.message);
+    res.status(500).json({ error: 'Erro ao deletar cliente: ' + err.message });
+  }
+});
+
 module.exports = router;

@@ -746,7 +746,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="admin-name-display"></span>
-        <button class="action-btn btn-edit" onclick="window.open('https://traccar.hsqrastreamento.com.br', '_blank')">Abrir Traccar</button>
+        <button class="action-btn btn-edit" onclick="openTraccarAdmin()">Abrir Traccar</button>
         <button class="action-btn btn-toggle-off" onclick="logout()">Sair</button>
       </div>
     </div>
@@ -1157,12 +1157,34 @@
                 ${c.is_active ? 'Desativar' : 'Ativar'}
               </button>
               <button class="action-btn btn-reset" onclick="resetClientPassword('${c.id}', '${c.name}')">Reset Senha</button>
+              <button class="action-btn btn-toggle-off" onclick="deleteClient('${c.id}', '${c.name}')" style="background:rgba(239,68,68,0.25);">Deletar</button>
             </td>
           </tr>
         `).join('');
       } catch (err) {
         console.error('Load clients error:', err);
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#f87171;">Erro ao carregar clientes</td></tr>';
+      }
+    }
+
+    async function deleteClient(id, name) {
+      if (!confirm('ATEN\u00c7\u00c3O: Deseja DELETAR permanentemente o cliente "' + name + '"?\n\nEsta a\u00e7\u00e3o N\u00c3O pode ser desfeita!\nO usu\u00e1rio tamb\u00e9m ser\u00e1 removido do Traccar.')) return;
+      if (!confirm('Confirme novamente: DELETAR "' + name + '" permanentemente?')) return;
+      try {
+        const resp = await fetch('/api/admin/clients/' + id, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + authToken },
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          showToast(data.message);
+          loadClients();
+          loadAdminDashboard();
+        } else {
+          showToast(data.error || 'Erro ao deletar', 'error');
+        }
+      } catch (err) {
+        showToast('Erro ao deletar cliente', 'error');
       }
     }
 
@@ -1297,6 +1319,30 @@
       toast.textContent = msg;
       document.body.appendChild(toast);
       setTimeout(() => toast.remove(), 3000);
+    }
+
+    async function openTraccarAdmin() {
+      const traccarUrl = 'https://traccar.hsqrastreamento.com.br';
+      try {
+        const params = new URLSearchParams();
+        params.append('email', 'admin@hsqrastreamento.com');
+        params.append('password', 'HSQ@2026Admin!');
+        const resp = await fetch(traccarUrl + '/api/session', {
+          method: 'POST',
+          body: params,
+          credentials: 'include',
+        });
+        if (resp.ok) {
+          window.open(traccarUrl, '_blank');
+        } else {
+          showToast('Erro ao criar sessao admin no Traccar', 'error');
+          window.open(traccarUrl, '_blank');
+        }
+      } catch (err) {
+        console.error('Admin Traccar session error:', err);
+        showToast('Erro de conexao com Traccar', 'error');
+        window.open(traccarUrl, '_blank');
+      }
     }
 
     function logout() {
