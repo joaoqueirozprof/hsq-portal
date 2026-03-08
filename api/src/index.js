@@ -11,6 +11,7 @@ const clientRoutes = require('./routes/clients');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
+app.set("trust proxy", 1);
 
 // Database pool
 const pool = new Pool({
