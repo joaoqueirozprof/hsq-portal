@@ -20,7 +20,7 @@
       align-items: center;
       justify-content: center;
       z-index: 99999;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.15s ease;
     }
     .loading-overlay.fade-out {
       opacity: 0;
@@ -53,7 +53,7 @@
       z-index: 99998;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.15s ease;
     }
     .success-overlay.show {
       opacity: 1;
@@ -1605,7 +1605,6 @@
     }
 
     async function logout() {
-      showLoading('Saindo...');
       // Mark user as offline in portal API
       if (authToken && currentUser && currentUser.role !== 'admin') {
         try {
@@ -1633,9 +1632,6 @@
     // ==================== INIT ====================
     // Handle logout redirect from Traccar
     if (new URLSearchParams(window.location.search).get("logout") === "1") {
-      // Show loading immediately to prevent any flash
-      var _loadingOv = document.getElementById('loading-overlay');
-      if (_loadingOv) { var _lt = document.getElementById('loading-text'); if (_lt) _lt.textContent = 'Saindo...'; }
       // Mark user offline via API before clearing token
       var _logoutToken = localStorage.getItem("hsq_token");
       if (_logoutToken) {
