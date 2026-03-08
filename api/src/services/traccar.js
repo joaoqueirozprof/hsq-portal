@@ -120,6 +120,16 @@ class TraccarService {
       cookies: resp.headers['set-cookie'],
     };
   }
+
+  // Generate/set a session token for a Traccar user (for URL-based login)
+  async setUserToken(userId) {
+    const user = await this.request('GET', `/api/users/${userId}`);
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    user.token = token;
+    await this.request('PUT', `/api/users/${userId}`, user);
+    return token;
+  }
 }
 
 module.exports = TraccarService;
