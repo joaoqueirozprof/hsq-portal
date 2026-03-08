@@ -23,7 +23,7 @@ services:
     container_name: hsq-api
     environment:
       DATABASE_URL: "postgresql://hsq_admin:HsqSecure2026@hsq-db:5432/hsq_portal"
-      TRACCAR_URL: "http://72.61.129.78:8082"
+      TRACCAR_URL: "https://traccar.hsqrastreamento.com.br"
       TRACCAR_ADMIN_EMAIL: "admin@hsqrastreamento.com"
       TRACCAR_ADMIN_PASSWORD: "HSQ@2026Admin!"
       JWT_SECRET: "hsq-jwt-secret-2026-prod"

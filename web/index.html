@@ -746,7 +746,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="admin-name-display"></span>
-        <button class="action-btn btn-edit" onclick="window.open('http://72.61.129.78:8082', '_blank')">Abrir Traccar</button>
+        <button class="action-btn btn-edit" onclick="window.open('https://traccar.hsqrastreamento.com.br', '_blank')">Abrir Traccar</button>
         <button class="action-btn btn-toggle-off" onclick="logout()">Sair</button>
       </div>
     </div>
@@ -1075,7 +1075,7 @@
     }
 
     function redirectToTraccar() {
-      const traccarUrl = localStorage.getItem('hsq_traccar_url') || 'http://72.61.129.78:8082';
+      const traccarUrl = localStorage.getItem('hsq_traccar_url') || 'https://traccar.hsqrastreamento.com.br';
       const email = sessionStorage.getItem('hsq_traccar_email');
       const pass = sessionStorage.getItem('hsq_traccar_pass');
 

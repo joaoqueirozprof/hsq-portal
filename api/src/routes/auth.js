@@ -120,7 +120,7 @@ router.post('/login', async (req, res) => {
     res.json({
       token,
       traccarEmail: traccarUser.email,
-      traccarUrl: process.env.TRACCAR_URL || 'http://72.61.129.78:8082',
+      traccarUrl: process.env.TRACCAR_URL || 'https://traccar.hsqrastreamento.com.br',
       user: {
         id: client.id,
         name: client.name,
