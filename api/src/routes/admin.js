@@ -261,20 +261,22 @@ router.post('/clients/:id/reset-password', async (req, res) => {
 router.get('/dashboard', async (req, res) => {
   try {
     const db = req.app.locals.db;
-    const [totalClients, activeClients, recentLogins] = await Promise.all([
+    const [totalClients, activeClients, recentLogins, onlineNow] = await Promise.all([
       db.query('SELECT COUNT(*) FROM clients'),
       db.query('SELECT COUNT(*) FROM clients WHERE is_active = true'),
       db.query("SELECT COUNT(*) FROM audit_log WHERE action = 'login' AND created_at > NOW() - INTERVAL '7 days'"),
+      db.query("SELECT COUNT(*) FROM clients WHERE last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at)"),
     ]);
 
     res.json({
       totalClients: parseInt(totalClients.rows[0].count),
       activeClients: parseInt(activeClients.rows[0].count),
       recentLogins: parseInt(recentLogins.rows[0].count),
+      onlineNow: parseInt(onlineNow.rows[0].count),
     });
   } catch (err) {
     console.error('Dashboard error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+    res.status(500).json({ error: 'Erro ao buscar estatisticas' });
   }
 });
 
@@ -314,4 +316,62 @@ router.delete('/clients/:id', async (req, res) => {
   }
 });
 
+
+// GET /api/admin/online-users - List users with online status
+router.get('/online-users', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const result = await db.query(`
+      SELECT id, name, document, document_type, phone, email, city, state,
+             last_login_at, last_logout_at,
+             CASE 
+               WHEN last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at)
+               THEN true
+               ELSE false
+             END as is_online,
+             CASE
+               WHEN last_login_at IS NOT NULL
+               THEN EXTRACT(EPOCH FROM (NOW() - last_login_at)) / 60
+               ELSE NULL
+             END as minutes_since_activity
+      FROM clients
+      WHERE is_active = true
+      ORDER BY 
+        CASE 
+          WHEN last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at) THEN 0
+          ELSE 1
+        END,
+        last_login_at DESC NULLS LAST
+    `);
+    
+    const users = result.rows.map(u => ({
+      id: u.id,
+      name: u.name,
+      document: u.document,
+      documentType: u.document_type,
+      phone: u.phone,
+      email: u.email,
+      city: u.city,
+      state: u.state,
+      lastLoginAt: u.last_login_at,
+      lastLogoutAt: u.last_logout_at,
+      isOnline: u.is_online,
+      minutesSinceActivity: u.minutes_since_activity ? Math.round(u.minutes_since_activity) : null,
+    }));
+
+    const onlineCount = users.filter(u => u.isOnline).length;
+    
+    res.json({
+      onlineCount,
+      totalActive: users.length,
+      users,
+    });
+  } catch (err) {
+    console.error('Online users error:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar usuarios online' });
+  }
+});
+
+
 module.exports = router;
+

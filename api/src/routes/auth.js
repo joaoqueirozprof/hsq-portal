@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
   try {
     const { document, password } = req.body;
     if (!document || !password) {
-      return res.status(400).json({ error: 'Documento e senha são obrigatórios' });
+      return res.status(400).json({ error: 'Documento e senha sao obrigatorios' });
     }
 
     const db = req.app.locals.db;
@@ -56,22 +56,22 @@ router.post('/login', async (req, res) => {
 
     // Find client by document
     const result = await db.query(
-      'SELECT * FROM clients WHERE REPLACE(REPLACE(REPLACE(document, \'.\', \'\'), \'-\', \'\'), \'/\', \'\') = $1',
+      "SELECT * FROM clients WHERE REPLACE(REPLACE(REPLACE(document, '.', ''), '-', ''), '/', '') = $1",
       [cleanDocument]
     );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Documento não cadastrado' });
+      return res.status(401).json({ error: 'Documento nao cadastrado' });
     }
 
     const client = result.rows[0];
 
     if (!client.is_active) {
-      return res.status(403).json({ error: 'Sua conta está desativada. Entre em contato com o administrador.' });
+      return res.status(403).json({ error: 'Sua conta esta desativada. Entre em contato com o administrador.' });
     }
 
     if (!client.traccar_user_id) {
-      return res.status(500).json({ error: 'Conta não vinculada ao sistema de rastreamento' });
+      return res.status(500).json({ error: 'Conta nao vinculada ao sistema de rastreamento' });
     }
 
     // Get Traccar user email to login
@@ -82,11 +82,9 @@ router.post('/login', async (req, res) => {
     try {
       await traccar.clientLogin(traccarUser.email, password);
     } catch (err) {
-      // If first login, password is the document number itself
       if (client.is_first_login) {
         try {
           await traccar.clientLogin(traccarUser.email, cleanDocument);
-          // First login successful with document as password
         } catch {
           return res.status(401).json({ error: 'Senha incorreta' });
         }
@@ -94,6 +92,12 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'Senha incorreta' });
       }
     }
+
+    // Mark user as online
+    await db.query(
+      'UPDATE clients SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1',
+      [client.id]
+    );
 
     // Generate JWT
     const token = jwt.sign(
@@ -143,20 +147,20 @@ router.post('/admin/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+      return res.status(400).json({ error: 'Email e senha sao obrigatorios' });
     }
 
     const db = req.app.locals.db;
     const result = await db.query('SELECT * FROM admin_users WHERE email = $1 AND is_active = true', [email]);
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      return res.status(401).json({ error: 'Credenciais invalidas' });
     }
 
     const admin = result.rows[0];
     const valid = await bcrypt.compare(password, admin.password_hash);
     if (!valid) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      return res.status(401).json({ error: 'Credenciais invalidas' });
     }
 
     const token = jwt.sign(
@@ -188,10 +192,8 @@ router.post('/change-password', authMiddleware, async (req, res) => {
     const db = req.app.locals.db;
     const traccar = new TraccarService(req.app.locals.traccarUrl);
 
-    // Update password in Traccar
     await traccar.updatePassword(req.user.traccarUserId, newPassword);
 
-    // Mark password changed
     await db.query(
       'UPDATE clients SET must_change_password = false, is_first_login = false, updated_at = NOW() WHERE id = $1',
       [req.user.id]
@@ -218,11 +220,47 @@ router.post('/complete-onboarding', authMiddleware, async (req, res) => {
       [req.user.id]
     );
 
-    res.json({ message: 'Onboarding concluído' });
+    res.json({ message: 'Onboarding concluido' });
   } catch (err) {
     console.error('Onboarding error:', err.message);
     res.status(500).json({ error: 'Erro ao completar onboarding' });
   }
 });
 
+// POST /api/auth/logout - Mark client as offline
+router.post('/logout', authMiddleware, async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    await db.query(
+      'UPDATE clients SET last_logout_at = NOW(), updated_at = NOW() WHERE id = $1',
+      [req.user.id]
+    );
+
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, ip_address) VALUES ($1, $2, $3, $4)',
+      ['client', req.user.id, 'logout', req.ip]
+    );
+
+    res.json({ message: 'Logout registrado' });
+  } catch (err) {
+    console.error('Logout error:', err.message);
+    res.status(500).json({ error: 'Erro ao registrar logout' });
+  }
+});
+
+// POST /api/auth/heartbeat - Update last_login_at (keep-alive)
+router.post('/heartbeat', authMiddleware, async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    await db.query(
+      'UPDATE clients SET last_login_at = NOW() WHERE id = $1',
+      [req.user.id]
+    );
+    res.json({ status: 'ok' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro no heartbeat' });
+  }
+});
+
 module.exports = router;
+

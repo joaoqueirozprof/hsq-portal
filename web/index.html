@@ -765,6 +765,21 @@
           <div class="stat-label">Logins (7 dias)</div>
           <div class="stat-value" id="stat-logins">-</div>
         </div>
+        <div class="stat-card" style="border-color:rgba(34,197,94,0.3);">
+          <div class="stat-label" style="color:#22c55e;">Online Agora</div>
+          <div class="stat-value" id="stat-online" style="color:#22c55e;">-</div>
+        </div>
+      </div>
+
+      <!-- Online Users Section -->
+      <div class="panel-card" id="online-users-panel" style="margin-bottom:24px;">
+        <div class="panel-header">
+          <h3>Usuarios Online</h3>
+          <button class="action-btn btn-edit" onclick="loadOnlineUsers()" style="font-size:12px;">Atualizar</button>
+        </div>
+        <div id="online-users-container" style="padding:16px;">
+          <div style="text-align:center;color:#64748b;">Carregando...</div>
+        </div>
       </div>
 
       <div class="panel-card">
@@ -942,6 +957,13 @@
         localStorage.setItem('hsq_token', authToken);
         localStorage.setItem('hsq_user', JSON.stringify(currentUser));
         checkAuth();
+    // Auto-refresh online users every 30s when on admin page
+    setInterval(function() {
+      var adminPage = document.getElementById('page-admin');
+      if (adminPage && !adminPage.classList.contains('hidden') && authToken) {
+        loadOnlineUsers();
+      }
+    }, 30000);
       } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.add('show');
@@ -1115,10 +1137,57 @@
         document.getElementById('stat-total').textContent = data.totalClients;
         document.getElementById('stat-active').textContent = data.activeClients;
         document.getElementById('stat-logins').textContent = data.recentLogins;
+        document.getElementById('stat-online').textContent = data.onlineNow || 0;
       } catch (err) {
         console.error('Dashboard error:', err);
       }
       loadClients();
+      loadOnlineUsers();
+    }
+
+    async function loadOnlineUsers() {
+      var container = document.getElementById('online-users-container');
+      if (!container) return;
+      try {
+        var resp = await fetch(API_URL + '/admin/online-users', {
+          headers: { 'Authorization': 'Bearer ' + authToken },
+        });
+        var data = await resp.json();
+        var users = data.users || [];
+        var onlineUsers = users.filter(function(u) { return u.isOnline; });
+        var offlineUsers = users.filter(function(u) { return !u.isOnline && u.lastLoginAt; });
+
+        if (onlineUsers.length === 0 && offlineUsers.length === 0) {
+          container.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;">Nenhum usuario logou ainda</div>';
+          return;
+        }
+
+        var h = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+        onlineUsers.forEach(function(u) {
+          var mins = u.minutesSinceActivity;
+          var timeText = 'agora';
+          if (mins > 1 && mins < 60) timeText = Math.round(mins) + ' min atras';
+          else if (mins >= 60) timeText = Math.round(mins / 60) + 'h atras';
+          h += '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:12px 16px;min-width:200px;display:flex;align-items:center;gap:10px;">';
+          h += '<div style="width:10px;height:10px;background:#22c55e;border-radius:50%;box-shadow:0 0 8px rgba(34,197,94,0.5);"></div>';
+          h += '<div><div style="font-weight:600;color:#f1f5f9;font-size:14px;">' + u.name + '</div>';
+          h += '<div style="font-size:11px;color:#94a3b8;">' + u.document + ' - ' + timeText + '</div></div></div>';
+        });
+        offlineUsers.filter(function(u) { return u.minutesSinceActivity && u.minutesSinceActivity < 1440; }).forEach(function(u) {
+          var mins = u.minutesSinceActivity;
+          var timeText = Math.round(mins) + ' min atras';
+          if (mins >= 60) timeText = Math.round(mins / 60) + 'h atras';
+          h += '<div style="background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.3);border-radius:12px;padding:12px 16px;min-width:200px;display:flex;align-items:center;gap:10px;">';
+          h += '<div style="width:10px;height:10px;background:#64748b;border-radius:50%;"></div>';
+          h += '<div><div style="font-weight:600;color:#94a3b8;font-size:14px;">' + u.name + '</div>';
+          h += '<div style="font-size:11px;color:#64748b;">offline - ' + timeText + '</div></div></div>';
+        });
+        h += '</div>';
+        container.innerHTML = h;
+      } catch (err) {
+        console.error('Online users error:', err);
+        container.innerHTML = '<div style="text-align:center;color:#f87171;">Erro ao carregar</div>';
+      }
     }
 
     async function loadClients(search = '') {
@@ -1145,8 +1214,13 @@
               <span style="margin-left:8px;">${c.document}</span>
             </td>
             <td>
-              <div style="font-weight:600;color:#f1f5f9;">${c.name}</div>
-              ${c.trade_name ? `<div style="font-size:12px;color:#64748b;">${c.trade_name}</div>` : ''}
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:${(c.last_login_at && (!c.last_logout_at || new Date(c.last_login_at) > new Date(c.last_logout_at))) ? '#22c55e' : '#475569'};box-shadow:${(c.last_login_at && (!c.last_logout_at || new Date(c.last_login_at) > new Date(c.last_logout_at))) ? '0 0 6px rgba(34,197,94,0.5)' : 'none'};flex-shrink:0;"></div>
+                <div>
+                  <div style="font-weight:600;color:#f1f5f9;">${c.name}</div>
+                  ${c.trade_name ? `<div style="font-size:12px;color:#64748b;">${c.trade_name}</div>` : ''}
+                </div>
+              </div>
             </td>
             <td>
               ${c.phone || '-'}<br>
@@ -1362,6 +1436,15 @@
     }
 
     async function logout() {
+      // Mark user as offline in portal API
+      if (authToken && currentUser && currentUser.role !== 'admin') {
+        try {
+          await fetch(API_URL + '/auth/logout', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + authToken },
+          });
+        } catch (e) { /* ignore */ }
+      }
       // Delete Traccar session to prevent session leaking
       try {
         await fetch('https://traccar.hsqrastreamento.com.br/api/session', {
@@ -1380,6 +1463,14 @@
     // ==================== INIT ====================
     // Handle logout redirect from Traccar
     if (new URLSearchParams(window.location.search).get("logout") === "1") {
+      // Mark user offline via API before clearing token
+      var _logoutToken = localStorage.getItem("hsq_token");
+      if (_logoutToken) {
+        fetch(API_URL + '/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + _logoutToken },
+        }).catch(function(){});
+      }
       localStorage.removeItem("hsq_token");
       localStorage.removeItem("hsq_user");
       authToken = null;

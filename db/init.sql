@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS clients (
     is_first_login BOOLEAN DEFAULT true,
     must_change_password BOOLEAN DEFAULT true,
     onboarding_completed BOOLEAN DEFAULT false,
+    last_login_at TIMESTAMP,
+    last_logout_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -52,6 +54,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_clients_document ON clients(document);
 CREATE INDEX IF NOT EXISTS idx_clients_traccar_user_id ON clients(traccar_user_id);
 CREATE INDEX IF NOT EXISTS idx_clients_is_active ON clients(is_active);
+CREATE INDEX IF NOT EXISTS idx_clients_last_login ON clients(last_login_at);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+
