@@ -95,14 +95,6 @@ router.post('/login', async (req, res) => {
       }
     }
 
-    // Generate a Traccar session token for direct URL login
-    let traccarToken = null;
-    try {
-      traccarToken = await traccar.setUserToken(client.traccar_user_id);
-    } catch (tokenErr) {
-      console.error('Warning: Could not set Traccar token:', tokenErr.message);
-    }
-
     // Generate JWT
     const token = jwt.sign(
       {
@@ -127,7 +119,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      traccarToken,
+      traccarEmail: traccarUser.email,
       traccarUrl: process.env.TRACCAR_URL || 'http://72.61.129.78:8082',
       user: {
         id: client.id,
