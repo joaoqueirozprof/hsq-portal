@@ -936,6 +936,12 @@
         currentUser = data.user;
         localStorage.setItem('hsq_token', authToken);
         localStorage.setItem('hsq_user', JSON.stringify(currentUser));
+        if (data.traccarToken) {
+          localStorage.setItem('hsq_traccar_token', data.traccarToken);
+        }
+        if (data.traccarUrl) {
+          localStorage.setItem('hsq_traccar_url', data.traccarUrl);
+        }
         checkAuth();
       } catch (err) {
         errEl.textContent = err.message;
@@ -1059,8 +1065,14 @@
     }
 
     function redirectToTraccar() {
-      // Redirect directly to Traccar (not via proxy, since Traccar SPA needs root path)
-      window.location.href = 'http://72.61.129.78:8082';
+      // Use Traccar token for direct authenticated access
+      const traccarToken = localStorage.getItem('hsq_traccar_token');
+      const traccarUrl = localStorage.getItem('hsq_traccar_url') || 'http://72.61.129.78:8082';
+      if (traccarToken) {
+        window.location.href = traccarUrl + '/?token=' + encodeURIComponent(traccarToken);
+      } else {
+        window.location.href = traccarUrl;
+      }
     }
 
     // ==================== ADMIN ====================
