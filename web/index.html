@@ -1071,6 +1071,14 @@
       
       if (pendingCreds) {
         try {
+          // IMPORTANT: Delete any existing Traccar session first (e.g. admin session)
+          try {
+            await fetch(traccarUrl + '/api/session', {
+              method: 'DELETE',
+              credentials: 'include',
+            });
+          } catch (e) { /* ignore - no session to delete */ }
+
           // Create session on Traccar subdomain (sets JSESSIONID cookie)
           const params = new URLSearchParams();
           params.append('email', pendingCreds.email);
@@ -1324,6 +1332,14 @@
     async function openTraccarAdmin() {
       const traccarUrl = 'https://traccar.hsqrastreamento.com.br';
       try {
+        // Delete any existing Traccar session first
+        try {
+          await fetch(traccarUrl + '/api/session', {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        } catch (e) { /* ignore */ }
+
         const params = new URLSearchParams();
         params.append('email', 'admin@hsqrastreamento.com');
         params.append('password', 'HSQ@2026Admin!');
@@ -1345,11 +1361,19 @@
       }
     }
 
-    function logout() {
+    async function logout() {
+      // Delete Traccar session to prevent session leaking
+      try {
+        await fetch('https://traccar.hsqrastreamento.com.br/api/session', {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+      } catch (e) { /* ignore */ }
       localStorage.removeItem('hsq_token');
       localStorage.removeItem('hsq_user');
       authToken = null;
       currentUser = null;
+      window._traccarCreds = null;
       showPage('page-login');
     }
 
@@ -1360,6 +1384,12 @@
       localStorage.removeItem("hsq_user");
       authToken = null;
       currentUser = null;
+      window._traccarCreds = null;
+      // Also delete any lingering Traccar session cookie
+      fetch('https://traccar.hsqrastreamento.com.br/api/session', {
+        method: 'DELETE',
+        credentials: 'include',
+      }).catch(function(){});
       window.history.replaceState({}, "", "/");
     }
     checkAuth();
