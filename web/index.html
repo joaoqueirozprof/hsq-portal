@@ -746,7 +746,7 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="admin-name-display"></span>
-        <button class="action-btn btn-edit" onclick="window.open('/traccar/', '_blank')">Abrir Traccar</button>
+        <button class="action-btn btn-edit" onclick="window.open('http://72.61.129.78:8082', '_blank')">Abrir Traccar</button>
         <button class="action-btn btn-toggle-off" onclick="logout()">Sair</button>
       </div>
     </div>
@@ -1059,8 +1059,8 @@
     }
 
     function redirectToTraccar() {
-      // Redirect to the Traccar interface
-      window.location.href = '/traccar/';
+      // Redirect directly to Traccar (not via proxy, since Traccar SPA needs root path)
+      window.location.href = 'http://72.61.129.78:8082';
     }
 
     // ==================== ADMIN ====================
