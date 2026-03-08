@@ -864,6 +864,14 @@
   <script>
     // ==================== CONFIG ====================
     const API_URL = window.location.origin + '/api';
+    // Support ?logout to clear session
+    if (window.location.search.includes('logout')) {
+      localStorage.removeItem('hsq_token');
+      localStorage.removeItem('hsq_user');
+      localStorage.removeItem('hsq_traccar_url');
+      sessionStorage.clear();
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     let authToken = localStorage.getItem('hsq_token');
     let currentUser = JSON.parse(localStorage.getItem('hsq_user') || 'null');
     let searchTimeout;
@@ -936,8 +944,10 @@
         currentUser = data.user;
         localStorage.setItem('hsq_token', authToken);
         localStorage.setItem('hsq_user', JSON.stringify(currentUser));
-        if (data.traccarToken) {
-          localStorage.setItem('hsq_traccar_token', data.traccarToken);
+        // Store Traccar credentials for auto-login redirect
+        if (data.traccarEmail) {
+          sessionStorage.setItem('hsq_traccar_email', data.traccarEmail);
+          sessionStorage.setItem('hsq_traccar_pass', password);
         }
         if (data.traccarUrl) {
           localStorage.setItem('hsq_traccar_url', data.traccarUrl);
@@ -1065,11 +1075,52 @@
     }
 
     function redirectToTraccar() {
-      // Use Traccar token for direct authenticated access
-      const traccarToken = localStorage.getItem('hsq_traccar_token');
       const traccarUrl = localStorage.getItem('hsq_traccar_url') || 'http://72.61.129.78:8082';
-      if (traccarToken) {
-        window.location.href = traccarUrl + '/?token=' + encodeURIComponent(traccarToken);
+      const email = sessionStorage.getItem('hsq_traccar_email');
+      const pass = sessionStorage.getItem('hsq_traccar_pass');
+
+      if (email && pass) {
+        // Create hidden form to POST to Traccar session endpoint
+        // This creates a session cookie in the browser for the Traccar domain
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = traccarUrl + '/api/session';
+        form.style.display = 'none';
+
+        const emailInput = document.createElement('input');
+        emailInput.name = 'email';
+        emailInput.value = email;
+        form.appendChild(emailInput);
+
+        const passInput = document.createElement('input');
+        passInput.name = 'password';
+        passInput.value = pass;
+        form.appendChild(passInput);
+
+        document.body.appendChild(form);
+
+        // Clear stored credentials
+        sessionStorage.removeItem('hsq_traccar_email');
+        sessionStorage.removeItem('hsq_traccar_pass');
+
+        // Submit form — browser will navigate to Traccar's /api/session response
+        // Then we use a trick: create the session first, then redirect
+        // Since form POST to /api/session returns JSON, we'll use an iframe approach
+        const iframe = document.createElement('iframe');
+        iframe.name = 'traccar_login_frame';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        form.target = 'traccar_login_frame';
+        form.submit();
+
+        // After session is created in iframe, redirect to Traccar
+        iframe.onload = function() {
+          window.location.href = traccarUrl;
+        };
+        // Fallback: redirect after 2 seconds in case onload doesn't fire
+        setTimeout(function() {
+          window.location.href = traccarUrl;
+        }, 2000);
       } else {
         window.location.href = traccarUrl;
       }
