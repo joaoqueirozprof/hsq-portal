@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contém credenciais)
+.env
+
+# Logs
+*.log
+.build.log
+
+# Docker volumes
+pgdata/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
