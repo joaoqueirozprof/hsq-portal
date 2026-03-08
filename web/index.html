@@ -1308,6 +1308,14 @@
     }
 
     // ==================== INIT ====================
+    // Handle logout redirect from Traccar
+    if (new URLSearchParams(window.location.search).get("logout") === "1") {
+      localStorage.removeItem("hsq_token");
+      localStorage.removeItem("hsq_user");
+      authToken = null;
+      currentUser = null;
+      window.history.replaceState({}, "", "/");
+    }
     checkAuth();
   </script>
 </body>
