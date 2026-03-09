@@ -3205,30 +3205,22 @@
         attributionControl: true,
       });
 
-      // Define tile layers
+      // Define tile layers - Google Maps tiles for high-resolution everywhere
       var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
-        maxZoom: 19,
+        maxZoom: 20,
         subdomains: ['a', 'b', 'c'],
       });
-      var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: '&copy; Esri',
+      var satelliteLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        attribution: '&copy; Google Maps',
         maxZoom: 21,
-        maxNativeZoom: 17,
+        subdomains: ['0', '1', '2', '3'],
       });
-      var hybridLayer = L.layerGroup([
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-          attribution: '&copy; Esri',
-          maxZoom: 21,
-          maxNativeZoom: 17,
-        }),
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
-          maxZoom: 19,
-          subdomains: ['a', 'b', 'c'],
-          opacity: 0.4,
-        })
-      ]);
+      var hybridLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        attribution: '&copy; Google Maps',
+        maxZoom: 21,
+        subdomains: ['0', '1', '2', '3'],
+      });
 
       // Store layers globally
       window._mapLayers = { streets: osmLayer, satellite: satelliteLayer, hybrid: hybridLayer };
@@ -3309,12 +3301,8 @@
               zoomControl: false,
               attributionControl: false,
             });
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-              maxZoom: 21, maxNativeZoom: 17,
-            }).addTo(streetViewMiniMap);
-            // Add street names overlay
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              maxZoom: 19, subdomains: ['a','b','c'], opacity: 0.35,
+            L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+              maxZoom: 21, subdomains: ['0','1','2','3'],
             }).addTo(streetViewMiniMap);
           } else {
             streetViewMiniMap.setView([lat, lng], 18);
