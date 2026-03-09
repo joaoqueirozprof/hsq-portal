@@ -2298,19 +2298,18 @@
       vehicles.forEach(function(v) {
         activeIds[v.deviceId] = true;
         var pos = v.position;
-        if (!pos) return;
+        // Skip devices with no position or at 0,0 (no GPS fix)
+        if (!pos || (pos.latitude === 0 && pos.longitude === 0)) return;
 
         var icon = getVehicleIcon(v.category, pos.speed, pos.course);
 
         if (vehicleMarkers[v.deviceId]) {
-          // Smooth move
           var marker = vehicleMarkers[v.deviceId];
           var newLatLng = L.latLng(pos.latitude, pos.longitude);
           marker.setLatLng(newLatLng);
           marker.setIcon(icon);
           marker.setPopupContent(buildPopupContent(v));
         } else {
-          // New marker
           var marker = L.marker([pos.latitude, pos.longitude], { icon: icon })
             .addTo(trackingMap)
             .bindPopup(buildPopupContent(v), { maxWidth: 280 });
@@ -2327,11 +2326,13 @@
           delete vehicleMarkers[id];
         }
       });
-      // If only 1 vehicle and first load, center on it
+      // Fit bounds on first load
       if (vehicles.length > 0 && !selectedVehicleId) {
         var bounds = [];
         vehicles.forEach(function(v) {
-          if (v.position) bounds.push([v.position.latitude, v.position.longitude]);
+          if (v.position && !(v.position.latitude === 0 && v.position.longitude === 0)) {
+            bounds.push([v.position.latitude, v.position.longitude]);
+          }
         });
         if (bounds.length > 0) {
           trackingMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
@@ -2388,10 +2389,11 @@
 
       container.innerHTML = filtered.map(function(v) {
         var pos = v.position;
-        var moving = pos && pos.speed > 2;
-        var statusClass = moving ? 'online' : (v.status === 'online' ? 'online' : 'offline');
-        var speedText = pos ? (pos.speed + ' km/h') : '-';
-        var addressText = (pos && pos.address) ? pos.address : '';
+        var hasRealPos = pos && !(pos.latitude === 0 && pos.longitude === 0);
+        var moving = hasRealPos && pos.speed > 2;
+        var statusClass = v.status === 'online' ? 'online' : (v.status === 'offline' ? 'offline' : 'unknown');
+        var speedText = hasRealPos ? (pos.speed + ' km/h') : (v.status === 'online' ? 'Sem GPS' : '-');
+        var addressText = hasRealPos && pos.address ? pos.address : (v.status === 'online' && !hasRealPos ? 'Aguardando sinal GPS...' : '');
         var isActive = v.deviceId == selectedVehicleId ? ' active' : '';
 
         return '<div class="vehicle-card' + isActive + '" onclick="selectVehicle(' + v.deviceId + ')">' +
@@ -2399,6 +2401,7 @@
           '<div class="v-meta">' +
             '<span class="v-speed">' + speedText + '</span>' +
             '<span>' + (v.category || 'veiculo') + '</span>' +
+            '<span>' + (v.status === 'online' ? 'Conectado' : 'Desconectado') + '</span>' +
           '</div>' +
           (addressText ? '<div class="v-address">' + escapeHtml(addressText) + '</div>' : '') +
         '</div>';
@@ -2452,7 +2455,9 @@
     function updateTrackingStats(vehicles) {
       var moving = 0, stopped = 0;
       vehicles.forEach(function(v) {
-        if (v.position && v.position.speed > 2) moving++;
+        var pos = v.position;
+        var hasRealPos = pos && !(pos.latitude === 0 && pos.longitude === 0);
+        if (hasRealPos && pos.speed > 2) moving++;
         else stopped++;
       });
       document.getElementById('stat-moving').textContent = moving;

@@ -33,9 +33,11 @@ router.get('/positions', async (req, res) => {
       posMap[p.deviceId] = p;
     }
 
-    // Combine devices with positions
+    // Combine devices with positions - show ALL devices even without position
     const result = devices.map(d => {
       const pos = posMap[d.id];
+      // Use device's own lastUpdate lat/lng if no live position available
+      const hasPos = pos && (pos.latitude !== 0 || pos.longitude !== 0);
       return {
         deviceId: d.id,
         name: d.name,
@@ -43,7 +45,7 @@ router.get('/positions', async (req, res) => {
         category: d.category || 'car',
         status: d.status,
         lastUpdate: d.lastUpdate,
-        position: pos ? {
+        position: hasPos ? {
           latitude: pos.latitude,
           longitude: pos.longitude,
           speed: pos.speed ? Math.round(pos.speed * 1.852) : 0, // knots to km/h
@@ -53,9 +55,21 @@ router.get('/positions', async (req, res) => {
           fixTime: pos.fixTime,
           accuracy: pos.accuracy || 0,
           attributes: pos.attributes || {},
-        } : null,
+        } : (pos ? {
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          speed: 0,
+          course: 0,
+          altitude: 0,
+          address: 'Aguardando sinal GPS...',
+          fixTime: pos.fixTime || d.lastUpdate,
+          accuracy: 0,
+          attributes: {},
+          noGps: true,
+        } : null),
+        hasGps: hasPos,
       };
-    }).filter(d => d.position); // Only return devices with position
+    });
 
     res.json(result);
   } catch (err) {
