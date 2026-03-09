@@ -58,23 +58,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Debug endpoint (temporary)
-app.get('/api/debug/check', async (req, res) => {
-  try {
-    const adminCheck = await pool.query('SELECT id, email, name FROM admin_users LIMIT 5');
-    const bcryptjs = require('bcryptjs');
-    const testHash = await bcryptjs.hash('test', 10);
-    const testCompare = await bcryptjs.compare('test', testHash);
-    res.json({
-      admins: adminCheck.rows,
-      bcryptjsWorks: testCompare,
-      nodeVersion: process.version,
-    });
-  } catch (err) {
-    res.json({ error: err.message, stack: err.stack });
-  }
-});
-
 const PORT = process.env.PORT || 4080;
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`HSQ Portal API running on port ${PORT}`);
