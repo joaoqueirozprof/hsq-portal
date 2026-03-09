@@ -556,7 +556,17 @@ router.post('/devices/:id/assign', async (req, res) => {
     }
 
     const traccar = new TraccarService(req.app.locals.traccarUrl);
-    await traccar.linkDeviceToUser(client.traccar_user_id, parseInt(req.params.id));
+    try {
+      await traccar.linkDeviceToUser(client.traccar_user_id, parseInt(req.params.id));
+    } catch (linkErr) {
+      // If already linked (Traccar returns 400), ignore it
+      const traccarMsg = linkErr.response?.data?.message || linkErr.response?.data || linkErr.message;
+      console.error('Traccar link error (may be duplicate):', traccarMsg);
+      if (linkErr.response?.status !== 400) {
+        throw linkErr;
+      }
+      // 400 often means "already linked" - continue
+    }
 
     await db.query(
       'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
@@ -565,8 +575,9 @@ router.post('/devices/:id/assign', async (req, res) => {
 
     res.json({ message: `Dispositivo vinculado a ${client.name}` });
   } catch (err) {
-    console.error('Assign device error:', err.message);
-    res.status(500).json({ error: 'Erro ao vincular dispositivo' });
+    console.error('Assign device error:', err.message, err.response?.data);
+    const msg = err.response?.data?.message || err.message;
+    res.status(500).json({ error: 'Erro ao vincular dispositivo: ' + msg });
   }
 });
 
@@ -590,7 +601,15 @@ router.post('/devices/:id/unassign', async (req, res) => {
     }
 
     const traccar = new TraccarService(req.app.locals.traccarUrl);
-    await traccar.unlinkDeviceFromUser(client.traccar_user_id, parseInt(req.params.id));
+    try {
+      await traccar.unlinkDeviceFromUser(client.traccar_user_id, parseInt(req.params.id));
+    } catch (unlinkErr) {
+      const traccarMsg = unlinkErr.response?.data?.message || unlinkErr.response?.data || unlinkErr.message;
+      console.error('Traccar unlink error:', traccarMsg);
+      if (unlinkErr.response?.status !== 400) {
+        throw unlinkErr;
+      }
+    }
 
     await db.query(
       'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
@@ -599,7 +618,7 @@ router.post('/devices/:id/unassign', async (req, res) => {
 
     res.json({ message: 'Dispositivo desvinculado' });
   } catch (err) {
-    console.error('Unassign device error:', err.message);
+    console.error('Unassign device error:', err.message, err.response?.data);
     res.status(500).json({ error: 'Erro ao desvincular dispositivo' });
   }
 });
