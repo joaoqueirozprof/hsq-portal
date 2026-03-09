@@ -35,7 +35,10 @@ services:
     restart: unless-stopped
 
   hsq-web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        CACHEBUST: "20260309v3"
     container_name: hsq-web
     ports:
       - "3080:80"
