@@ -1105,11 +1105,18 @@
     }
     .vehicle-card .v-address {
       font-size: 11px;
-      color: #64748b;
-      margin-top: 4px;
-      white-space: nowrap;
+      color: #94a3b8;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
+    }
+    .vehicle-card .v-address::before {
+      content: '\1F4CD ';
     }
     .tracking-map-container {
       flex: 1;
@@ -3182,6 +3189,100 @@
       }
     }
 
+    // ====== REVERSE GEOCODING (Nominatim / OpenStreetMap) ======
+    var _geocodeCache = {};
+    var _geocodeQueue = [];
+    var _geocodeProcessing = false;
+
+    function reverseGeocode(lat, lng, callback) {
+      var key = lat.toFixed(4) + ',' + lng.toFixed(4);
+      if (_geocodeCache[key]) { callback(_geocodeCache[key]); return; }
+      _geocodeQueue.push({ lat: lat, lng: lng, key: key, cb: callback });
+      processGeocodeQueue();
+    }
+
+    function processGeocodeQueue() {
+      if (_geocodeProcessing || _geocodeQueue.length === 0) return;
+      _geocodeProcessing = true;
+      var item = _geocodeQueue.shift();
+      // Rate limit: 1 req/sec for Nominatim
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + item.lat + '&lon=' + item.lng + '&zoom=18&addressdetails=1&accept-language=pt-BR', {
+        headers: { 'User-Agent': 'HSQRastreamento/1.0' }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var addr = formatAddress(data);
+        _geocodeCache[item.key] = addr;
+        item.cb(addr);
+        _geocodeProcessing = false;
+        // Wait 1.1s before next request (Nominatim rate limit)
+        setTimeout(processGeocodeQueue, 1100);
+      })
+      .catch(function() {
+        _geocodeCache[item.key] = 'Endereço não disponível';
+        item.cb(_geocodeCache[item.key]);
+        _geocodeProcessing = false;
+        setTimeout(processGeocodeQueue, 1100);
+      });
+    }
+
+    function formatAddress(data) {
+      if (!data || !data.address) return data && data.display_name ? data.display_name : 'Endereço não disponível';
+      var a = data.address;
+      var parts = [];
+      // Street + number
+      if (a.road) {
+        var street = a.road;
+        if (a.house_number) street += ', ' + a.house_number;
+        parts.push(street);
+      }
+      // Neighborhood
+      if (a.suburb || a.neighbourhood) parts.push(a.suburb || a.neighbourhood);
+      // City
+      if (a.city || a.town || a.village || a.municipality) {
+        var city = a.city || a.town || a.village || a.municipality;
+        if (a.state) city += ' - ' + a.state;
+        parts.push(city);
+      }
+      return parts.length > 0 ? parts.join(', ') : (data.display_name || 'Endereço não disponível');
+    }
+
+    // Geocode all vehicles and update UI
+    function geocodeAllVehicles(vehicles) {
+      vehicles.forEach(function(v) {
+        if (!v.position || (v.position.latitude === 0 && v.position.longitude === 0)) return;
+        if (v.position.address && v.position.address !== 'Aguardando sinal GPS...') return; // Already has address from Traccar
+        reverseGeocode(v.position.latitude, v.position.longitude, function(addr) {
+          v.position.address = addr;
+          // Update vehicle card in sidebar
+          updateVehicleCardAddress(v.deviceId, addr);
+          // Update popup if marker exists
+          if (vehicleMarkers[v.deviceId]) {
+            vehicleMarkers[v.deviceId].setPopupContent(buildPopupContent(v));
+          }
+        });
+      });
+    }
+
+    function updateVehicleCardAddress(deviceId, address) {
+      var cards = document.querySelectorAll('.vehicle-card');
+      cards.forEach(function(card) {
+        var onclick = card.getAttribute('onclick');
+        if (onclick && onclick.indexOf(deviceId) !== -1) {
+          var addrEl = card.querySelector('.v-address');
+          if (addrEl) {
+            addrEl.textContent = address;
+          } else {
+            // Create address element if not present
+            var div = document.createElement('div');
+            div.className = 'v-address';
+            div.textContent = address;
+            card.appendChild(div);
+          }
+        }
+      });
+    }
+
     function initTrackingMap() {
       if (trackingMap) {
         try { trackingMap.invalidateSize(); } catch(e) {}
@@ -3423,6 +3524,7 @@
         var vehicles = await resp.json();
         console.log('[HSQ] Got', vehicles.length, 'vehicles');
         allVehicleData = vehicles;
+        geocodeAllVehicles(vehicles);
         renderVehicleList(vehicles);
         updateTrackingStats(vehicles);
         if (mapReady && trackingMap) {
@@ -3506,14 +3608,18 @@
 
     function buildPopupContent(v) {
       var pos = v.position;
+      var addr = pos.address || 'Buscando endereço...';
       var streetViewUrl = 'https://www.google.com/maps?layer=c&cbll=' + pos.latitude + ',' + pos.longitude;
       return '<div>' +
         '<div class="popup-title">' + escapeHtml(v.name) + '</div>' +
         '<div class="popup-meta">' +
-          '<div class="popup-speed">' + pos.speed + ' km/h</div>' +
-          '<div>' + (pos.address || 'Endereco nao disponivel') + '</div>' +
-          '<div>Atualizado: ' + (pos.fixTime ? new Date(pos.fixTime).toLocaleString('pt-BR') : '-') + '</div>' +
-          '<div>Lat: ' + pos.latitude.toFixed(5) + ' / Lng: ' + pos.longitude.toFixed(5) + '</div>' +
+          '<div class="popup-speed">&#128668; ' + pos.speed + ' km/h</div>' +
+          '<div style="margin:4px 0;padding:4px 0;border-bottom:1px solid #e2e8f0;">' +
+            '<strong style="color:#1e293b;">&#128205; </strong>' +
+            '<span style="color:#334155;">' + escapeHtml(addr) + '</span>' +
+          '</div>' +
+          '<div style="color:#94a3b8;font-size:11px;">Atualizado: ' + (pos.fixTime ? new Date(pos.fixTime).toLocaleString('pt-BR') : '-') + '</div>' +
+          '<div style="color:#94a3b8;font-size:10px;">Coords: ' + pos.latitude.toFixed(5) + ', ' + pos.longitude.toFixed(5) + '</div>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">' +
           '<button onclick="openStreetViewForVehicle(' + pos.latitude + ',' + pos.longitude + ',\'' + escapeHtml(v.name).replace(/'/g, "\\'") + '\')" class="btn-street-view" style="border:none;">&#128694; Street View</button>' +

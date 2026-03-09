@@ -443,6 +443,7 @@ router.get('/devices', async (req, res) => {
           latitude: pos.latitude,
           longitude: pos.longitude,
           speed: pos.speed,
+          address: pos.address || null,
           fixTime: pos.fixTime,
         } : null,
       };
