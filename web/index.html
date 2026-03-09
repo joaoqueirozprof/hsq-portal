@@ -3307,9 +3307,15 @@
           } else {
             streetViewMiniMap.setView([lat, lng], 18);
           }
-          // Add a marker for the vehicle
+          // Add a marker for the vehicle (using divIcon to avoid broken default icon)
           if (window._svMarker) streetViewMiniMap.removeLayer(window._svMarker);
-          window._svMarker = L.marker([lat, lng]).addTo(streetViewMiniMap);
+          var svIcon = L.divIcon({
+            html: '<div style="background:#ef4444;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:12px;">&#128666;</div>',
+            className: '',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+          });
+          window._svMarker = L.marker([lat, lng], { icon: svIcon }).addTo(streetViewMiniMap);
           streetViewMiniMap.invalidateSize();
         }, 200);
       }, 100);
@@ -3454,13 +3460,16 @@
       Object.keys(vehicleMarkers).forEach(function(id) {
         if (!activeIds[id]) { trackingMap.removeLayer(vehicleMarkers[id]); delete vehicleMarkers[id]; }
       });
-      if (vehicles.length > 0 && !selectedVehicleId) {
+      if (vehicles.length > 0 && !selectedVehicleId && !window._initialBoundsDone) {
         var bounds = [];
         vehicles.forEach(function(v) {
           if (v.position && !(v.position.latitude === 0 && v.position.longitude === 0))
             bounds.push([v.position.latitude, v.position.longitude]);
         });
-        if (bounds.length > 0) trackingMap.fitBounds(bounds, { padding: [50,50], maxZoom: 15 });
+        if (bounds.length > 0) {
+          trackingMap.fitBounds(bounds, { padding: [50,50], maxZoom: 15 });
+          window._initialBoundsDone = true;
+        }
       }
     }
 
