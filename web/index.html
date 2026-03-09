@@ -3200,6 +3200,7 @@
       trackingMap = L.map('tracking-map', {
         center: [-6.127, -38.207],
         zoom: 14,
+        maxZoom: 21,
         zoomControl: true,
         attributionControl: true,
       });
@@ -3212,12 +3213,14 @@
       });
       var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: '&copy; Esri',
-        maxZoom: 19,
+        maxZoom: 21,
+        maxNativeZoom: 17,
       });
       var hybridLayer = L.layerGroup([
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
           attribution: '&copy; Esri',
-          maxZoom: 19,
+          maxZoom: 21,
+          maxNativeZoom: 17,
         }),
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap',
@@ -3307,7 +3310,7 @@
               attributionControl: false,
             });
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-              maxZoom: 19,
+              maxZoom: 21, maxNativeZoom: 17,
             }).addTo(streetViewMiniMap);
             // Add street names overlay
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
