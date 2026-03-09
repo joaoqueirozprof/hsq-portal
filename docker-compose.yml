@@ -36,16 +36,22 @@ services:
     command:
       - -c
       - |
-        apk add --no-cache git >/dev/null 2>&1
+        set -e
+        echo "=== Installing git ==="
+        apk add --no-cache git 2>&1
+        echo "=== Cloning repo ==="
+        rm -rf /tmp/repo
+        git clone --depth 1 https://github.com/joaoqueirozprof/hsq-portal.git /tmp/repo 2>&1
+        echo "=== Setting up app ==="
         mkdir -p /app
-        git clone --depth 1 https://github.com/joaoqueirozprof/hsq-portal.git /tmp/repo
         cp -r /tmp/repo/api/src /app/src
         cp /tmp/repo/api/package.json /app/package.json
         rm -rf /tmp/repo
         cd /app
-        npm install --production
-        node src/index.js
-    working_dir: /app
+        echo "=== Installing dependencies ==="
+        npm install --production 2>&1
+        echo "=== Starting API ==="
+        exec node src/index.js
     restart: unless-stopped
 
   hsq-web:
