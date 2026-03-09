@@ -35,15 +35,22 @@ services:
     restart: unless-stopped
 
   hsq-web:
-    build:
-      context: ./web
-      args:
-        CACHEBUST: "20260309v3"
+    image: nginx:alpine
     container_name: hsq-web
     ports:
       - "3080:80"
     depends_on:
       - hsq-api
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        apk add --no-cache git >/dev/null 2>&1
+        git clone --depth 1 https://github.com/joaoqueirozprof/hsq-portal.git /tmp/repo
+        cp /tmp/repo/web/index.html /usr/share/nginx/html/index.html
+        cp /tmp/repo/web/nginx.conf /etc/nginx/conf.d/default.conf
+        rm -rf /tmp/repo
+        nginx -g 'daemon off;'
     restart: unless-stopped
 
 
