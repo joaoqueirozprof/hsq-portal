@@ -38,7 +38,7 @@ services:
     build: ./web
     container_name: hsq-web
     ports:
-      - "127.0.0.1:3080:80"
+      - "3080:80"
     depends_on:
       - hsq-api
     restart: unless-stopped
