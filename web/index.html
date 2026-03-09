@@ -3248,6 +3248,13 @@
     // ====== MAP LAYER SWITCHING ======
     function switchMapLayer(layerName) {
       if (!trackingMap || !window._mapLayers) return;
+
+      // Close Street View panel if open
+      var svPanel = document.getElementById('streetview-panel');
+      if (svPanel && svPanel.classList.contains('active')) {
+        closeStreetView();
+      }
+
       // Remove current layer
       var current = window._currentLayer;
       if (current === layerName) return;
@@ -3360,7 +3367,7 @@
         closeStreetView();
         return;
       }
-      // Open street view for the first vehicle with GPS, or use map center
+      // Open street view for the first vehicle with GPS
       if (allVehicleData && allVehicleData.length > 0) {
         var v = allVehicleData.find(function(veh) { return veh.position && veh.hasGps; });
         if (v && v.position) {
@@ -3368,11 +3375,50 @@
           return;
         }
       }
-      // Fallback to map center
+      // No vehicles - show satellite view of map center WITHOUT vehicle marker
       if (trackingMap) {
         var c = trackingMap.getCenter();
-        openStreetViewForVehicle(c.lat, c.lng, 'Centro do mapa');
+        openStreetViewNoMarker(c.lat, c.lng);
       }
+    }
+
+    // Open street view satellite panel without any vehicle marker (for clients with no vehicles)
+    function openStreetViewNoMarker(lat, lng) {
+      streetViewLat = lat;
+      streetViewLng = lng;
+      streetViewName = '';
+
+      var panel = document.getElementById('streetview-panel');
+      var nameEl = document.getElementById('sv-location-name');
+      var coordsEl = document.getElementById('sv-coords');
+
+      nameEl.textContent = '';
+      coordsEl.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+      panel.classList.add('active');
+
+      resizeBothMaps();
+
+      setTimeout(function() {
+        if (!streetViewMiniMap) {
+          streetViewMiniMap = L.map('streetview-minimap', {
+            center: [lat, lng],
+            zoom: 16,
+            zoomControl: true,
+            attributionControl: false,
+          });
+          L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 21, subdomains: ['0','1','2','3'],
+          }).addTo(streetViewMiniMap);
+        } else {
+          streetViewMiniMap.setView([lat, lng], 16);
+        }
+        // No marker - no vehicles to show
+        if (window._svMarker) {
+          streetViewMiniMap.removeLayer(window._svMarker);
+          window._svMarker = null;
+        }
+        resizeBothMaps();
+      }, 300);
     }
 
     async function loadTrackingPositions() {
