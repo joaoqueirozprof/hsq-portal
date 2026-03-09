@@ -1113,9 +1113,18 @@
     }
     .tracking-map-container {
       flex: 1;
-      position: relative;
+      display: flex;
+      flex-direction: column;
       height: calc(100vh - 60px);
       min-height: 500px;
+      gap: 0;
+    }
+    .tracking-map-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+      border-radius: 0;
+      overflow: hidden;
     }
     #tracking-map {
       width: 100%;
@@ -1190,20 +1199,15 @@
 
     /* Street View Panel */
     .streetview-panel {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 50%;
-      z-index: 1000;
-      background: #0f172a;
-      border-top: 3px solid #4183ef;
       display: none;
       flex-direction: column;
-      transition: height 0.3s ease;
+      flex: 1;
+      min-height: 0;
+      background: #0f172a;
+      border-top: 2px solid #4183ef;
+      overflow: hidden;
     }
     .streetview-panel.active { display: flex; }
-    .streetview-panel.expanded { height: 100%; }
     .streetview-header {
       display: flex;
       align-items: center;
@@ -1813,26 +1817,27 @@
           </div>
         </div>
       </div>
-      <div class="tracking-map-container" style="position:relative;">
-        <div id="tracking-map"></div>
-        <div class="tracking-stats-bar">
-          <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="stat-moving">0</span> em movimento</div>
-          <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="stat-stopped">0</span> parados</div>
+      <div class="tracking-map-container">
+        <!-- Main Map -->
+        <div class="tracking-map-wrap">
+          <div id="tracking-map"></div>
+          <div class="tracking-stats-bar">
+            <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="stat-moving">0</span> em movimento</div>
+            <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="stat-stopped">0</span> parados</div>
+          </div>
+          <div class="map-layer-control" id="map-layer-control">
+            <button class="map-layer-btn active" onclick="switchMapLayer('streets')" id="btn-layer-streets">&#127758; Mapa</button>
+            <button class="map-layer-btn" onclick="switchMapLayer('satellite')" id="btn-layer-satellite">&#128752; Satelite</button>
+            <button class="map-layer-btn" onclick="switchMapLayer('hybrid')" id="btn-layer-hybrid">&#127756; Hibrido</button>
+            <button class="map-layer-btn" onclick="toggleStreetViewMode()" id="btn-layer-streetview">&#128694; Street View</button>
+          </div>
         </div>
-        <!-- Map Layer Control -->
-        <div class="map-layer-control" id="map-layer-control">
-          <button class="map-layer-btn active" onclick="switchMapLayer('streets')" id="btn-layer-streets">&#127758; Mapa</button>
-          <button class="map-layer-btn" onclick="switchMapLayer('satellite')" id="btn-layer-satellite">&#128752; Satelite</button>
-          <button class="map-layer-btn" onclick="switchMapLayer('hybrid')" id="btn-layer-hybrid">&#127756; Hibrido</button>
-          <button class="map-layer-btn" onclick="toggleStreetViewMode()" id="btn-layer-streetview">&#128694; Street View</button>
-        </div>
-        <!-- Street View Panel -->
+        <!-- Street View Panel (same size as main map when active) -->
         <div class="streetview-panel" id="streetview-panel">
           <div class="streetview-header">
-            <div class="sv-title">&#128694; Street View <span id="sv-location-name" style="color:#94a3b8;font-weight:400;"></span></div>
+            <div class="sv-title">&#128752; Vista Satelite <span id="sv-location-name" style="color:#94a3b8;font-weight:400;"></span></div>
             <div class="sv-actions">
-              <button class="sv-btn" onclick="toggleStreetViewExpand()" id="sv-expand-btn">&#8597; Expandir</button>
-              <button class="sv-btn" onclick="openStreetViewExternal()" title="Abrir no Google Maps">&#128279; Abrir no Google</button>
+              <button class="sv-btn" onclick="openStreetViewExternal()">&#128694; Street View no Google</button>
               <button class="sv-btn sv-close" onclick="closeStreetView()">&#10005; Fechar</button>
             </div>
           </div>
@@ -3289,69 +3294,58 @@
       coordsEl.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
       panel.classList.add('active');
 
-      // Initialize or update the satellite minimap
-      setTimeout(function() {
-        if (trackingMap) trackingMap.invalidateSize();
+      // Resize main map first, then init minimap
+      resizeBothMaps();
 
-        setTimeout(function() {
-          if (!streetViewMiniMap) {
-            streetViewMiniMap = L.map('streetview-minimap', {
-              center: [lat, lng],
-              zoom: 18,
-              zoomControl: false,
-              attributionControl: false,
-            });
-            L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-              maxZoom: 21, subdomains: ['0','1','2','3'],
-            }).addTo(streetViewMiniMap);
-          } else {
-            streetViewMiniMap.setView([lat, lng], 18);
-          }
-          // Add a marker for the vehicle (using divIcon to avoid broken default icon)
-          if (window._svMarker) streetViewMiniMap.removeLayer(window._svMarker);
-          var svIcon = L.divIcon({
-            html: '<div style="background:#ef4444;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:12px;">&#128666;</div>',
-            className: '',
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
+      setTimeout(function() {
+        if (!streetViewMiniMap) {
+          streetViewMiniMap = L.map('streetview-minimap', {
+            center: [lat, lng],
+            zoom: 18,
+            zoomControl: true,
+            attributionControl: false,
           });
-          window._svMarker = L.marker([lat, lng], { icon: svIcon }).addTo(streetViewMiniMap);
-          streetViewMiniMap.invalidateSize();
-        }, 200);
-      }, 100);
+          L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 21, subdomains: ['0','1','2','3'],
+          }).addTo(streetViewMiniMap);
+        } else {
+          streetViewMiniMap.setView([lat, lng], 18);
+        }
+        // Vehicle marker
+        if (window._svMarker) streetViewMiniMap.removeLayer(window._svMarker);
+        var svIcon = L.divIcon({
+          html: '<div style="background:#ef4444;width:28px;height:28px;border-radius:50%;border:3px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:14px;">&#128666;</div>',
+          className: '',
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+        window._svMarker = L.marker([lat, lng], { icon: svIcon }).addTo(streetViewMiniMap);
+        resizeBothMaps();
+      }, 300);
     }
 
     function closeStreetView() {
       var panel = document.getElementById('streetview-panel');
-      panel.classList.remove('active', 'expanded');
-      document.getElementById('sv-expand-btn').innerHTML = '&#8597; Expandir';
+      panel.classList.remove('active');
 
-      // Destroy minimap to free resources
+      // Destroy minimap
       if (streetViewMiniMap) {
         streetViewMiniMap.remove();
         streetViewMiniMap = null;
         window._svMarker = null;
       }
 
-      // Resize map back
-      setTimeout(function() {
-        if (trackingMap) trackingMap.invalidateSize();
-      }, 350);
+      // Resize main map back to full
+      resizeBothMaps();
     }
 
-    function toggleStreetViewExpand() {
-      var panel = document.getElementById('streetview-panel');
-      var btn = document.getElementById('sv-expand-btn');
-      if (panel.classList.contains('expanded')) {
-        panel.classList.remove('expanded');
-        btn.innerHTML = '&#8597; Expandir';
-      } else {
-        panel.classList.add('expanded');
-        btn.innerHTML = '&#8597; Reduzir';
-      }
-      setTimeout(function() {
-        if (trackingMap) trackingMap.invalidateSize();
-      }, 350);
+    function resizeBothMaps() {
+      [100, 300, 600].forEach(function(d) {
+        setTimeout(function() {
+          if (trackingMap) try { trackingMap.invalidateSize(true); } catch(e) {}
+          if (streetViewMiniMap) try { streetViewMiniMap.invalidateSize(true); } catch(e) {}
+        }, d);
+      });
     }
 
     function openStreetViewExternal() {
