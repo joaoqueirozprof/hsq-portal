@@ -1,6 +1,6 @@
 // Run on startup to ensure admin user exists
 const { Pool } = require('pg');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 async function seed() {
   const pool = new Pool({
