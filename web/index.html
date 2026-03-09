@@ -277,8 +277,8 @@
     }
     .logo-radar-container {
       position: relative;
-      width: 120px;
-      height: 120px;
+      width: 160px;
+      height: 160px;
       margin: 0 auto 18px;
       display: flex;
       align-items: center;
@@ -316,9 +316,9 @@
     }
 
     .login-logo img {
-      width: 72px;
-      height: 72px;
-      border-radius: 18px;
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
       position: relative;
       z-index: 2;
       box-shadow:
@@ -1089,6 +1089,146 @@
     .leaflet-popup-content .popup-meta { font-size: 12px; color: #64748b; line-height: 1.5; }
     .leaflet-popup-content .popup-speed { font-size: 13px; font-weight: 600; color: #4183ef; }
 
+    /* Password Toggle Eye */
+    .password-wrapper {
+      position: relative;
+    }
+    .password-wrapper input {
+      padding-right: 48px;
+    }
+    .password-toggle {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #475569;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .password-toggle:hover { color: #94a3b8; }
+    .password-toggle svg { width: 20px; height: 20px; }
+
+    /* Animated Map Background with Vehicles */
+    .login-map-bg {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.12;
+    }
+    .map-road {
+      position: absolute;
+      background: rgba(65,131,239,0.5);
+      border-radius: 2px;
+    }
+    .map-road-h1 { top: 30%; left: 0; width: 100%; height: 2px; }
+    .map-road-h2 { top: 55%; left: 0; width: 100%; height: 2px; }
+    .map-road-h3 { top: 78%; left: 0; width: 100%; height: 1.5px; }
+    .map-road-v1 { top: 0; left: 20%; width: 2px; height: 100%; }
+    .map-road-v2 { top: 0; left: 50%; width: 2px; height: 100%; }
+    .map-road-v3 { top: 0; left: 75%; width: 1.5px; height: 100%; }
+    .map-road-d1 { top: 0; left: 10%; width: 1.5px; height: 140%; transform: rotate(35deg); transform-origin: top left; }
+    .map-road-d2 { top: 10%; left: 60%; width: 1.5px; height: 120%; transform: rotate(-25deg); transform-origin: top left; }
+    .map-block {
+      position: absolute;
+      border: 1px solid rgba(65,131,239,0.25);
+      border-radius: 3px;
+      background: rgba(65,131,239,0.03);
+    }
+    .map-block-1 { top: 32%; left: 22%; width: 26%; height: 21%; }
+    .map-block-2 { top: 32%; left: 52%; width: 21%; height: 21%; }
+    .map-block-3 { top: 57%; left: 22%; width: 26%; height: 19%; }
+    .map-block-4 { top: 57%; left: 52%; width: 21%; height: 19%; }
+    .map-block-5 { top: 10%; left: 5%; width: 13%; height: 18%; }
+    .map-block-6 { top: 10%; left: 77%; width: 18%; height: 18%; }
+
+    /* Map Pin Points */
+    .map-pin {
+      position: absolute;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4183ef;
+      box-shadow: 0 0 8px rgba(65,131,239,0.6);
+      animation: pinPulse 3s ease-in-out infinite;
+    }
+    .map-pin::after {
+      content: '';
+      position: absolute;
+      top: -4px; left: -4px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 1px solid rgba(65,131,239,0.4);
+      animation: pinRing 3s ease-out infinite;
+    }
+    @keyframes pinPulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+    }
+    @keyframes pinRing {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+    .map-pin-1 { top: 28%; left: 35%; animation-delay: 0s; }
+    .map-pin-2 { top: 53%; left: 62%; animation-delay: 1s; }
+    .map-pin-3 { top: 76%; left: 25%; animation-delay: 2s; }
+    .map-pin-4 { top: 15%; left: 80%; animation-delay: 0.5s; }
+
+    /* Animated Vehicles on Map */
+    .map-vehicle {
+      position: absolute;
+      font-size: 14px;
+      filter: drop-shadow(0 0 4px rgba(34,197,94,0.5));
+      z-index: 2;
+    }
+    .map-vehicle-1 { animation: vehicleDrive1 10s linear infinite; }
+    .map-vehicle-2 { animation: vehicleDrive2 14s linear infinite; }
+    .map-vehicle-3 { animation: vehicleDrive3 12s linear infinite; }
+    .map-vehicle-4 { animation: vehicleDrive4 16s linear infinite; }
+    @keyframes vehicleDrive1 {
+      0% { top: 29.5%; left: -3%; }
+      30% { top: 29.5%; left: 18%; }
+      35% { top: 29.5%; left: 19%; }
+      65% { top: 29.5%; left: 48%; }
+      70% { top: 29.5%; left: 49%; }
+      100% { top: 29.5%; left: 103%; }
+    }
+    @keyframes vehicleDrive2 {
+      0% { top: 54.5%; left: 103%; }
+      40% { top: 54.5%; left: 51%; }
+      45% { top: 54.5%; left: 50%; }
+      100% { top: 54.5%; left: -3%; }
+    }
+    @keyframes vehicleDrive3 {
+      0% { top: -3%; left: 19.5%; }
+      25% { top: 28%; left: 19.5%; }
+      30% { top: 30%; left: 19.5%; }
+      60% { top: 53%; left: 19.5%; }
+      65% { top: 55%; left: 19.5%; }
+      100% { top: 103%; left: 19.5%; }
+    }
+    @keyframes vehicleDrive4 {
+      0% { top: 77.5%; left: -3%; }
+      100% { top: 77.5%; left: 103%; }
+    }
+
+    /* Vehicle trail effect */
+    .map-vehicle::after {
+      content: '';
+      position: absolute;
+      top: 50%; left: -20px;
+      width: 18px; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(34,197,94,0.4));
+      transform: translateY(-50%);
+    }
+
     /* GPS Waiting Animations */
     .gps-waiting-icon {
       width: 80px; height: 80px;
@@ -1238,6 +1378,36 @@
     <!-- GPS Floating Particles -->
     <div class="gps-particles" id="gps-particles"></div>
 
+    <!-- Animated Map with Vehicles -->
+    <div class="login-map-bg">
+      <!-- Roads -->
+      <div class="map-road map-road-h1"></div>
+      <div class="map-road map-road-h2"></div>
+      <div class="map-road map-road-h3"></div>
+      <div class="map-road map-road-v1"></div>
+      <div class="map-road map-road-v2"></div>
+      <div class="map-road map-road-v3"></div>
+      <div class="map-road map-road-d1"></div>
+      <div class="map-road map-road-d2"></div>
+      <!-- Blocks -->
+      <div class="map-block map-block-1"></div>
+      <div class="map-block map-block-2"></div>
+      <div class="map-block map-block-3"></div>
+      <div class="map-block map-block-4"></div>
+      <div class="map-block map-block-5"></div>
+      <div class="map-block map-block-6"></div>
+      <!-- Pins -->
+      <div class="map-pin map-pin-1"></div>
+      <div class="map-pin map-pin-2"></div>
+      <div class="map-pin map-pin-3"></div>
+      <div class="map-pin map-pin-4"></div>
+      <!-- Vehicles driving -->
+      <div class="map-vehicle map-vehicle-1">&#128663;</div>
+      <div class="map-vehicle map-vehicle-2">&#128666;</div>
+      <div class="map-vehicle map-vehicle-3">&#128665;</div>
+      <div class="map-vehicle map-vehicle-4">&#128656;</div>
+    </div>
+
     <div class="login-container">
       <div class="login-card">
         <!-- Logo with Radar Animation -->
@@ -1275,7 +1445,12 @@
           </div>
           <div class="form-group">
             <label>Senha</label>
-            <input type="password" id="login-password" placeholder="Sua senha" required>
+            <div class="password-wrapper">
+              <input type="password" id="login-password" placeholder="Sua senha" required>
+              <button type="button" class="password-toggle" onclick="togglePassword('login-password', this)" aria-label="Mostrar senha">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
             <p style="font-size:11px; color:#475569; margin-top:6px; font-weight:400;">Primeiro acesso? Use seu CPF/CNPJ como senha.</p>
           </div>
           <button type="submit" class="btn-primary" id="btn-client-login">Acessar Rastreamento</button>
@@ -1290,7 +1465,12 @@
           </div>
           <div class="form-group">
             <label>Senha</label>
-            <input type="password" id="admin-password" placeholder="Sua senha" required>
+            <div class="password-wrapper">
+              <input type="password" id="admin-password" placeholder="Sua senha" required>
+              <button type="button" class="password-toggle" onclick="togglePassword('admin-password', this)" aria-label="Mostrar senha">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
           <button type="submit" class="btn-primary" id="btn-admin-login">Entrar como Admin</button>
         </form>
@@ -1311,11 +1491,21 @@
         <form onsubmit="handleChangePassword(event)">
           <div class="form-group">
             <label>Nova Senha</label>
-            <input type="password" id="new-password" placeholder="Mínimo 6 caracteres" oninput="checkPasswordStrength()" required>
+            <div class="password-wrapper">
+              <input type="password" id="new-password" placeholder="Mínimo 6 caracteres" oninput="checkPasswordStrength()" required>
+              <button type="button" class="password-toggle" onclick="togglePassword('new-password', this)" aria-label="Mostrar senha">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
           <div class="form-group">
             <label>Confirmar Senha</label>
-            <input type="password" id="confirm-password" placeholder="Repita a senha" required>
+            <div class="password-wrapper">
+              <input type="password" id="confirm-password" placeholder="Repita a senha" required>
+              <button type="button" class="password-toggle" onclick="togglePassword('confirm-password', this)" aria-label="Mostrar senha">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
           </div>
           <ul class="password-requirements">
             <li id="req-length">Pelo menos 6 caracteres</li>
@@ -1693,6 +1883,22 @@
       for (var i = 0; i < 15; i++) { setTimeout(createParticle, i * 300); }
       setInterval(function() { if (container.children.length < 20) createParticle(); }, 800);
     })();
+
+    // ==================== PASSWORD TOGGLE ====================
+    function togglePassword(inputId, btn) {
+      var input = document.getElementById(inputId);
+      if (!input) return;
+      var isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      // Eye open vs eye closed SVG
+      if (isPassword) {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+        btn.style.color = '#4183ef';
+      } else {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        btn.style.color = '';
+      }
+    }
 
     // ==================== CONFIG ====================
     const API_URL = window.location.origin + '/api';
