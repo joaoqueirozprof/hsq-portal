@@ -1028,19 +1028,22 @@
     .tracking-map-container {
       flex: 1;
       position: relative;
+      height: calc(100vh - 60px);
+      min-height: 500px;
     }
     #tracking-map {
       width: 100%;
       height: 100%;
-      min-height: 400px;
       background: #1a2332;
     }
     /* Leaflet tile fix */
     .leaflet-container {
       width: 100% !important;
       height: 100% !important;
-      min-height: 400px;
       background: #1a2332;
+    }
+    .leaflet-tile-pane {
+      will-change: auto !important;
     }
     .tracking-stats-bar {
       position: absolute;
@@ -3013,15 +3016,14 @@
           trackingInterval = setInterval(loadTrackingPositions, 5000);
         }
         // Force map resize after it becomes visible (critical for Leaflet)
-        setTimeout(function() {
-          if (trackingMap) {
-            try {
-              trackingMap.invalidateSize();
-              console.log('[HSQ] Map size invalidated after show');
-            } catch(e) {}
-          }
-        }, 500);
-      }, 300);
+        [200, 500, 1000, 2000].forEach(function(d) {
+          setTimeout(function() {
+            if (trackingMap) {
+              try { trackingMap.invalidateSize(true); } catch(e) {}
+            }
+          }, d);
+        });
+      }, 100);
     }
 
     function goBackFromTracking() {
@@ -3106,10 +3108,14 @@
       mapReady = true;
       console.log('[HSQ] Map initialized OK with layer control');
 
-      // Re-invalidate after a moment to handle late layout shifts
-      setTimeout(function() {
-        try { trackingMap.invalidateSize(); } catch(e) {}
-      }, 300);
+      // Multiple invalidateSize calls to handle late layout shifts
+      [100, 300, 600, 1000, 2000].forEach(function(delay) {
+        setTimeout(function() {
+          if (trackingMap) {
+            try { trackingMap.invalidateSize(true); } catch(e) {}
+          }
+        }, delay);
+      });
     }
 
     // ====== MAP LAYER SWITCHING ======
@@ -3156,7 +3162,7 @@
       var nameEl = document.getElementById('sv-location-name');
 
       // Use Google Maps Street View embed (no API key needed)
-      iframe.src = 'https://www.google.com/maps/embed?pb=!4v' + Date.now() + '!6m8!1m7!1s!2m2!1d' + lat + '!2d' + lng + '!3f0!4f0!5f0.7820865974627469';
+      iframe.src = 'https://maps.google.com/maps?q=&layer=c&cbll=' + lat + ',' + lng + '&cbp=11,0,0,0,0&output=svembed&t=h';
 
       nameEl.textContent = name ? ('- ' + name) : '';
       panel.classList.add('active');
