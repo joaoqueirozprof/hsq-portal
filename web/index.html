@@ -1099,6 +1099,96 @@
     .leaflet-popup-content .popup-meta { font-size: 12px; color: #64748b; line-height: 1.5; }
     .leaflet-popup-content .popup-speed { font-size: 13px; font-weight: 600; color: #4183ef; }
 
+    /* Street View Panel */
+    .streetview-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 50%;
+      z-index: 1000;
+      background: #0f172a;
+      border-top: 3px solid #4183ef;
+      display: none;
+      flex-direction: column;
+      transition: height 0.3s ease;
+    }
+    .streetview-panel.active { display: flex; }
+    .streetview-panel.expanded { height: 100%; }
+    .streetview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border-bottom: 1px solid rgba(65,131,239,0.3);
+      flex-shrink: 0;
+    }
+    .streetview-header .sv-title {
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .streetview-header .sv-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .streetview-header .sv-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+    }
+    .streetview-header .sv-btn:hover { background: rgba(255,255,255,0.2); }
+    .streetview-header .sv-btn.sv-close { background: rgba(239,68,68,0.3); border-color: rgba(239,68,68,0.5); }
+    .streetview-header .sv-btn.sv-close:hover { background: rgba(239,68,68,0.5); }
+    .streetview-iframe { flex: 1; border: none; width: 100%; }
+
+    /* Map Layer Toggle */
+    .map-layer-control {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      display: flex;
+      gap: 0;
+      background: rgba(15,23,42,0.9);
+      border-radius: 10px;
+      padding: 4px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .map-layer-btn {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .map-layer-btn:hover { color: #e2e8f0; background: rgba(255,255,255,0.1); }
+    .map-layer-btn.active {
+      background: linear-gradient(135deg, #4183ef, #6366f1);
+      color: white;
+      box-shadow: 0 2px 8px rgba(65,131,239,0.4);
+    }
+
     /* Password Toggle Eye */
     .password-wrapper {
       position: relative;
@@ -1599,11 +1689,30 @@
           </div>
         </div>
       </div>
-      <div class="tracking-map-container">
+      <div class="tracking-map-container" style="position:relative;">
         <div id="tracking-map"></div>
         <div class="tracking-stats-bar">
           <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="stat-moving">0</span> em movimento</div>
           <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="stat-stopped">0</span> parados</div>
+        </div>
+        <!-- Map Layer Control -->
+        <div class="map-layer-control" id="map-layer-control">
+          <button class="map-layer-btn active" onclick="switchMapLayer('streets')" id="btn-layer-streets">&#127758; Mapa</button>
+          <button class="map-layer-btn" onclick="switchMapLayer('satellite')" id="btn-layer-satellite">&#128752; Satelite</button>
+          <button class="map-layer-btn" onclick="switchMapLayer('hybrid')" id="btn-layer-hybrid">&#127756; Hibrido</button>
+          <button class="map-layer-btn" onclick="toggleStreetViewMode()" id="btn-layer-streetview">&#128694; Street View</button>
+        </div>
+        <!-- Street View Panel -->
+        <div class="streetview-panel" id="streetview-panel">
+          <div class="streetview-header">
+            <div class="sv-title">&#128694; Street View <span id="sv-location-name" style="color:#94a3b8;font-weight:400;"></span></div>
+            <div class="sv-actions">
+              <button class="sv-btn" onclick="toggleStreetViewExpand()" id="sv-expand-btn">&#8597; Expandir</button>
+              <button class="sv-btn" onclick="openStreetViewExternal()" title="Abrir no Google Maps">&#128279; Abrir no Google</button>
+              <button class="sv-btn sv-close" onclick="closeStreetView()">&#10005; Fechar</button>
+            </div>
+          </div>
+          <iframe class="streetview-iframe" id="streetview-iframe" src="" allowfullscreen></iframe>
         </div>
       </div>
     </div>
@@ -2966,20 +3075,151 @@
         attributionControl: true,
       });
 
-      // Use OpenStreetMap tiles with fallback
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // Define tile layers
+      var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 19,
         subdomains: ['a', 'b', 'c'],
-      }).addTo(trackingMap);
+      });
+      var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri',
+        maxZoom: 19,
+      });
+      var hybridLayer = L.layerGroup([
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          attribution: '&copy; Esri',
+          maxZoom: 19,
+        }),
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+          maxZoom: 19,
+          subdomains: ['a', 'b', 'c'],
+          opacity: 0.4,
+        })
+      ]);
+
+      // Store layers globally
+      window._mapLayers = { streets: osmLayer, satellite: satelliteLayer, hybrid: hybridLayer };
+      window._currentLayer = 'streets';
+      osmLayer.addTo(trackingMap);
 
       mapReady = true;
-      console.log('[HSQ] Map initialized OK');
+      console.log('[HSQ] Map initialized OK with layer control');
 
       // Re-invalidate after a moment to handle late layout shifts
       setTimeout(function() {
         try { trackingMap.invalidateSize(); } catch(e) {}
       }, 300);
+    }
+
+    // ====== MAP LAYER SWITCHING ======
+    function switchMapLayer(layerName) {
+      if (!trackingMap || !window._mapLayers) return;
+      // Remove current layer
+      var current = window._currentLayer;
+      if (current === layerName) return;
+
+      var layers = window._mapLayers;
+      if (layers[current]) {
+        if (current === 'hybrid') {
+          layers[current].eachLayer(function(l) { trackingMap.removeLayer(l); });
+          trackingMap.removeLayer(layers[current]);
+        } else {
+          trackingMap.removeLayer(layers[current]);
+        }
+      }
+
+      // Add new layer
+      if (layerName === 'hybrid') {
+        layers[layerName].addTo(trackingMap);
+      } else {
+        layers[layerName].addTo(trackingMap);
+      }
+      window._currentLayer = layerName;
+
+      // Update buttons
+      document.querySelectorAll('.map-layer-btn').forEach(function(btn) { btn.classList.remove('active'); });
+      var activeBtn = document.getElementById('btn-layer-' + layerName);
+      if (activeBtn) activeBtn.classList.add('active');
+    }
+
+    // ====== STREET VIEW ======
+    var streetViewLat = null, streetViewLng = null, streetViewName = '';
+
+    function openStreetViewForVehicle(lat, lng, name) {
+      streetViewLat = lat;
+      streetViewLng = lng;
+      streetViewName = name || '';
+
+      var panel = document.getElementById('streetview-panel');
+      var iframe = document.getElementById('streetview-iframe');
+      var nameEl = document.getElementById('sv-location-name');
+
+      // Use Google Maps Street View embed (no API key needed)
+      iframe.src = 'https://www.google.com/maps/embed?pb=!4v' + Date.now() + '!6m8!1m7!1s!2m2!1d' + lat + '!2d' + lng + '!3f0!4f0!5f0.7820865974627469';
+
+      nameEl.textContent = name ? ('- ' + name) : '';
+      panel.classList.add('active');
+
+      // Resize map to fit
+      setTimeout(function() {
+        if (trackingMap) trackingMap.invalidateSize();
+      }, 350);
+    }
+
+    function closeStreetView() {
+      var panel = document.getElementById('streetview-panel');
+      var iframe = document.getElementById('streetview-iframe');
+      panel.classList.remove('active', 'expanded');
+      iframe.src = '';
+      document.getElementById('sv-expand-btn').innerHTML = '&#8597; Expandir';
+
+      // Resize map back
+      setTimeout(function() {
+        if (trackingMap) trackingMap.invalidateSize();
+      }, 350);
+    }
+
+    function toggleStreetViewExpand() {
+      var panel = document.getElementById('streetview-panel');
+      var btn = document.getElementById('sv-expand-btn');
+      if (panel.classList.contains('expanded')) {
+        panel.classList.remove('expanded');
+        btn.innerHTML = '&#8597; Expandir';
+      } else {
+        panel.classList.add('expanded');
+        btn.innerHTML = '&#8597; Reduzir';
+      }
+      setTimeout(function() {
+        if (trackingMap) trackingMap.invalidateSize();
+      }, 350);
+    }
+
+    function openStreetViewExternal() {
+      if (streetViewLat && streetViewLng) {
+        window.open('https://www.google.com/maps?layer=c&cbll=' + streetViewLat + ',' + streetViewLng, '_blank');
+      }
+    }
+
+    function toggleStreetViewMode() {
+      var panel = document.getElementById('streetview-panel');
+      if (panel.classList.contains('active')) {
+        closeStreetView();
+        return;
+      }
+      // Open street view for the first vehicle with GPS, or use map center
+      if (allVehicleData && allVehicleData.length > 0) {
+        var v = allVehicleData.find(function(veh) { return veh.position && veh.hasGps; });
+        if (v && v.position) {
+          openStreetViewForVehicle(v.position.latitude, v.position.longitude, v.name);
+          return;
+        }
+      }
+      // Fallback to map center
+      if (trackingMap) {
+        var c = trackingMap.getCenter();
+        openStreetViewForVehicle(c.lat, c.lng, 'Centro do mapa');
+      }
     }
 
     async function loadTrackingPositions() {
@@ -3082,8 +3322,11 @@
           '<div>Atualizado: ' + (pos.fixTime ? new Date(pos.fixTime).toLocaleString('pt-BR') : '-') + '</div>' +
           '<div>Lat: ' + pos.latitude.toFixed(5) + ' / Lng: ' + pos.longitude.toFixed(5) + '</div>' +
         '</div>' +
-        '<a href="' + streetViewUrl + '" target="_blank" class="btn-street-view">&#128065; Ver Rua (Street View)</a>' +
-        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + pos.latitude + ',' + pos.longitude + '" target="_blank" class="btn-street-view" style="background:linear-gradient(135deg,#4183ef,#6366f1);margin-left:4px;">&#128204; Rota ate aqui</a>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">' +
+          '<button onclick="openStreetViewForVehicle(' + pos.latitude + ',' + pos.longitude + ',\'' + escapeHtml(v.name).replace(/'/g, "\\'") + '\')" class="btn-street-view" style="border:none;">&#128694; Street View</button>' +
+          '<a href="' + streetViewUrl + '" target="_blank" class="btn-street-view">&#128065; Google Maps</a>' +
+          '<a href="https://www.google.com/maps/dir/?api=1&destination=' + pos.latitude + ',' + pos.longitude + '" target="_blank" class="btn-street-view" style="background:linear-gradient(135deg,#4183ef,#6366f1);">&#128204; Rota</a>' +
+        '</div>' +
       '</div>';
     }
 
