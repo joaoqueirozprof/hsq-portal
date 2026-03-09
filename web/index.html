@@ -1032,6 +1032,15 @@
     #tracking-map {
       width: 100%;
       height: 100%;
+      min-height: 400px;
+      background: #1a2332;
+    }
+    /* Leaflet tile fix */
+    .leaflet-container {
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 400px;
+      background: #1a2332;
     }
     .tracking-stats-bar {
       position: absolute;
@@ -2886,7 +2895,7 @@
       if (backBtn) {
         backBtn.style.display = (currentUser && currentUser.role === 'admin') ? 'inline-block' : 'none';
       }
-      // Load data FIRST (independent of map), then init map
+      // Wait for DOM to be fully visible before initializing map
       setTimeout(function() {
         console.log('[HSQ] showTrackingPage: loading positions...');
         loadTrackingPositions();
@@ -2894,7 +2903,16 @@
         if (!trackingInterval) {
           trackingInterval = setInterval(loadTrackingPositions, 5000);
         }
-      }, 200);
+        // Force map resize after it becomes visible (critical for Leaflet)
+        setTimeout(function() {
+          if (trackingMap) {
+            try {
+              trackingMap.invalidateSize();
+              console.log('[HSQ] Map size invalidated after show');
+            } catch(e) {}
+          }
+        }, 500);
+      }, 300);
     }
 
     function goBackFromTracking() {
@@ -2922,15 +2940,46 @@
     }
 
     function initTrackingMap() {
-      if (trackingMap) { try { trackingMap.invalidateSize(); } catch(e) {} return; }
+      if (trackingMap) {
+        try { trackingMap.invalidateSize(); } catch(e) {}
+        return;
+      }
       if (typeof L === 'undefined') { console.error('[HSQ] Leaflet not loaded!'); return; }
+
+      var mapEl = document.getElementById('tracking-map');
+      if (!mapEl) { console.error('[HSQ] #tracking-map not found!'); return; }
+
+      // Ensure map container has explicit dimensions (Leaflet requires this)
+      var rect = mapEl.getBoundingClientRect();
+      console.log('[HSQ] Map container size:', rect.width, 'x', rect.height);
+      if (rect.height < 50) {
+        // Force a minimum height if flex hasn't computed yet
+        mapEl.style.height = (window.innerHeight - 60) + 'px';
+        console.log('[HSQ] Forced map height:', mapEl.style.height);
+      }
+
       console.log('[HSQ] Initializing Leaflet map...');
-      trackingMap = L.map('tracking-map', { center: [-6.11, -38.20], zoom: 13, zoomControl: true });
+      trackingMap = L.map('tracking-map', {
+        center: [-6.127, -38.207],
+        zoom: 14,
+        zoomControl: true,
+        attributionControl: true,
+      });
+
+      // Use OpenStreetMap tiles with fallback
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap', maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19,
+        subdomains: ['a', 'b', 'c'],
       }).addTo(trackingMap);
+
       mapReady = true;
       console.log('[HSQ] Map initialized OK');
+
+      // Re-invalidate after a moment to handle late layout shifts
+      setTimeout(function() {
+        try { trackingMap.invalidateSize(); } catch(e) {}
+      }, 300);
     }
 
     async function loadTrackingPositions() {
@@ -2946,7 +2995,19 @@
         allVehicleData = vehicles;
         renderVehicleList(vehicles);
         updateTrackingStats(vehicles);
-        if (mapReady) { try { updateMapMarkers(vehicles); } catch(e) { console.error('[HSQ] Map markers error:', e); } }
+        if (mapReady && trackingMap) {
+          try {
+            updateMapMarkers(vehicles);
+          } catch(e) { console.error('[HSQ] Map markers error:', e); }
+        } else {
+          console.log('[HSQ] Map not ready yet, will retry markers on next cycle');
+          // Retry once after map might be ready
+          setTimeout(function() {
+            if (mapReady && trackingMap && allVehicleData.length > 0) {
+              try { updateMapMarkers(allVehicleData); } catch(e) {}
+            }
+          }, 1000);
+        }
       } catch (err) {
         console.error('[HSQ] Tracking error:', err);
         var container = document.getElementById('vehicle-list');
