@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
 
   hsq-api:
-    build: ./api
+    image: node:20-alpine
     container_name: hsq-api
     environment:
       DATABASE_URL: "postgresql://hsq_admin:HsqSecure2026@hsq-db:5432/hsq_portal"
@@ -32,6 +32,20 @@ services:
     depends_on:
       hsq-db:
         condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        apk add --no-cache git >/dev/null 2>&1
+        mkdir -p /app
+        git clone --depth 1 https://github.com/joaoqueirozprof/hsq-portal.git /tmp/repo
+        cp -r /tmp/repo/api/src /app/src
+        cp /tmp/repo/api/package.json /app/package.json
+        rm -rf /tmp/repo
+        cd /app
+        npm install --production
+        node src/index.js
+    working_dir: /app
     restart: unless-stopped
 
   hsq-web:
