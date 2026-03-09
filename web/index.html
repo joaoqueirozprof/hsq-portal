@@ -861,6 +861,98 @@
     .leaflet-popup-content .popup-meta { font-size: 12px; color: #64748b; line-height: 1.5; }
     .leaflet-popup-content .popup-speed { font-size: 13px; font-weight: 600; color: #4183ef; }
 
+    /* GPS Waiting Animations */
+    .gps-waiting-icon {
+      width: 80px; height: 80px;
+      background: rgba(65,131,239,0.1);
+      border: 2px solid rgba(65,131,239,0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      animation: gpsPulse 2s ease-in-out infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes gpsPulse {
+      0%, 100% { transform: scale(1); border-color: rgba(65,131,239,0.3); box-shadow: 0 0 0 0 rgba(65,131,239,0.2); }
+      50% { transform: scale(1.08); border-color: rgba(65,131,239,0.6); box-shadow: 0 0 20px 5px rgba(65,131,239,0.15); }
+    }
+    .dot-pulse {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 6px;
+    }
+    .dot-pulse span {
+      width: 6px; height: 6px;
+      background: #4183ef;
+      border-radius: 50%;
+      animation: dotBounce 1.4s ease-in-out infinite;
+    }
+    .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+    .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dotBounce {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40% { opacity: 1; transform: scale(1.2); }
+    }
+    .gps-waiting-container {
+      text-align: center;
+      padding: 40px 20px;
+      color: #94a3b8;
+    }
+    .gps-waiting-container h3 {
+      color: #e2e8f0;
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .gps-waiting-container p {
+      font-size: 13px;
+      line-height: 1.6;
+      max-width: 280px;
+      margin: 0 auto;
+    }
+    .gps-explanation {
+      background: rgba(65,131,239,0.08);
+      border: 1px solid rgba(65,131,239,0.15);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 16px;
+      text-align: left;
+    }
+    .gps-explanation .exp-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4183ef;
+      margin-bottom: 6px;
+    }
+    .gps-explanation .exp-text {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+    .vehicle-card .v-no-gps {
+      font-size: 11px;
+      color: #f59e0b;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .tracking-error {
+      text-align: center;
+      padding: 40px 20px;
+      color: #ef4444;
+    }
+    .tracking-error h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .tracking-error p {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .tracking-sidebar { width: 100%; height: 40%; border-right: none; border-bottom: 1px solid rgba(65,131,239,0.1); }
@@ -2183,21 +2275,27 @@
     var allVehicleData = [];
     var trackingInterval = null;
     var selectedVehicleId = null;
+    var mapReady = false;
 
     function showTrackingPage() {
       showPage('page-tracking');
       document.getElementById('tracking-user-name').textContent = currentUser ? currentUser.name : '';
-      // Show "Voltar ao Painel" only for admin
       var backBtn = document.getElementById('btn-back-admin');
       if (backBtn) {
         backBtn.style.display = (currentUser && currentUser.role === 'admin') ? 'inline-block' : 'none';
       }
-      // Init map if not yet
-      setTimeout(function() { initTrackingMap(); }, 100);
+      // Load data FIRST (independent of map), then init map
+      setTimeout(function() {
+        console.log('[HSQ] showTrackingPage: loading positions...');
+        loadTrackingPositions();
+        try { initTrackingMap(); } catch(e) { console.error('[HSQ] Map init error:', e); }
+        if (!trackingInterval) {
+          trackingInterval = setInterval(loadTrackingPositions, 5000);
+        }
+      }, 200);
     }
 
     function goBackFromTracking() {
-      // Stop auto-refresh
       if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
       showPage('page-admin');
     }
@@ -2207,7 +2305,6 @@
       if (currentUser && currentUser.role === 'admin') {
         openTraccarAdmin();
       } else {
-        // Client - use stored creds if available
         var creds = window._traccarCreds;
         if (creds) {
           var params = new URLSearchParams();
@@ -2223,48 +2320,49 @@
     }
 
     function initTrackingMap() {
-      if (trackingMap) {
-        trackingMap.invalidateSize();
-        loadTrackingPositions();
-        return;
-      }
-      // Center on Pau dos Ferros, RN (approximate)
-      trackingMap = L.map('tracking-map', {
-        center: [-6.11, -38.20],
-        zoom: 13,
-        zoomControl: true,
-      });
+      if (trackingMap) { try { trackingMap.invalidateSize(); } catch(e) {} return; }
+      if (typeof L === 'undefined') { console.error('[HSQ] Leaflet not loaded!'); return; }
+      console.log('[HSQ] Initializing Leaflet map...');
+      trackingMap = L.map('tracking-map', { center: [-6.11, -38.20], zoom: 13, zoomControl: true });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap',
-        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap', maxZoom: 19,
       }).addTo(trackingMap);
-
-      // Load positions immediately
-      loadTrackingPositions();
-      // Auto-refresh every 5 seconds
-      trackingInterval = setInterval(loadTrackingPositions, 5000);
+      mapReady = true;
+      console.log('[HSQ] Map initialized OK');
     }
 
     async function loadTrackingPositions() {
+      console.log('[HSQ] Fetching /api/tracking/positions...');
       try {
         var resp = await fetch(API_URL + '/tracking/positions', {
           headers: { 'Authorization': 'Bearer ' + authToken },
         });
+        console.log('[HSQ] Tracking response status:', resp.status);
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         var vehicles = await resp.json();
+        console.log('[HSQ] Got', vehicles.length, 'vehicles');
         allVehicleData = vehicles;
-        updateMapMarkers(vehicles);
         renderVehicleList(vehicles);
         updateTrackingStats(vehicles);
+        if (mapReady) { try { updateMapMarkers(vehicles); } catch(e) { console.error('[HSQ] Map markers error:', e); } }
       } catch (err) {
-        console.error('Tracking error:', err);
+        console.error('[HSQ] Tracking error:', err);
+        var container = document.getElementById('vehicle-list');
+        if (container && allVehicleData.length === 0) {
+          container.innerHTML = '<div style="text-align:center;padding:40px 16px;">' +
+            '<div style="font-size:32px;margin-bottom:8px;">&#9888;&#65039;</div>' +
+            '<div style="color:#f1f5f9;font-size:14px;font-weight:600;">Erro ao carregar</div>' +
+            '<div style="color:#64748b;font-size:12px;margin-top:6px;">Tentando novamente em 5s...</div>' +
+            '<div style="color:#ef4444;font-size:11px;margin-top:8px;">' + escapeHtml(err.message) + '</div>' +
+          '</div>';
+        }
       }
     }
 
     function getVehicleIcon(category, speed, course) {
       var moving = speed > 2;
       var color = moving ? '#22c55e' : '#ef4444';
-      var iconChar = '&#128663;'; // car emoji
+      var iconChar = '&#128663;';
       if (category === 'truck') iconChar = '&#128666;';
       else if (category === 'motorcycle') iconChar = '&#127949;';
       else if (category === 'bus') iconChar = '&#128653;';
@@ -2272,130 +2370,102 @@
       else if (category === 'boat') iconChar = '&#9973;';
       else if (category === 'person') iconChar = '&#128694;';
       else if (category === 'animal') iconChar = '&#128062;';
-
       var rotation = course || 0;
-      var html = '<div style="' +
-        'background:' + color + ';' +
-        'width:32px;height:32px;border-radius:50%;' +
-        'display:flex;align-items:center;justify-content:center;' +
-        'font-size:16px;' +
-        'border:2px solid white;' +
-        'box-shadow:0 2px 8px rgba(0,0,0,0.4);' +
-        'transform:rotate(' + rotation + 'deg);' +
-        '">' + iconChar + '</div>';
-
-      return L.divIcon({
-        html: html,
-        className: 'vehicle-marker',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-        popupAnchor: [0, -18],
-      });
+      var html = '<div style="background:' + color + ';width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);transform:rotate(' + rotation + 'deg);">' + iconChar + '</div>';
+      return L.divIcon({ html: html, className: 'vehicle-marker', iconSize: [32,32], iconAnchor: [16,16], popupAnchor: [0,-18] });
     }
 
     function updateMapMarkers(vehicles) {
+      if (!trackingMap) return;
       var activeIds = {};
       vehicles.forEach(function(v) {
         activeIds[v.deviceId] = true;
         var pos = v.position;
-        // Skip devices with no position or at 0,0 (no GPS fix)
         if (!pos || (pos.latitude === 0 && pos.longitude === 0)) return;
-
         var icon = getVehicleIcon(v.category, pos.speed, pos.course);
-
         if (vehicleMarkers[v.deviceId]) {
           var marker = vehicleMarkers[v.deviceId];
-          var newLatLng = L.latLng(pos.latitude, pos.longitude);
-          marker.setLatLng(newLatLng);
+          marker.setLatLng(L.latLng(pos.latitude, pos.longitude));
           marker.setIcon(icon);
           marker.setPopupContent(buildPopupContent(v));
         } else {
           var marker = L.marker([pos.latitude, pos.longitude], { icon: icon })
-            .addTo(trackingMap)
-            .bindPopup(buildPopupContent(v), { maxWidth: 280 });
-          marker.on('click', function() {
-            selectVehicle(v.deviceId);
-          });
+            .addTo(trackingMap).bindPopup(buildPopupContent(v), { maxWidth: 280 });
+          marker.on('click', function() { selectVehicle(v.deviceId); });
           vehicleMarkers[v.deviceId] = marker;
         }
       });
-      // Remove markers for vehicles no longer present
       Object.keys(vehicleMarkers).forEach(function(id) {
-        if (!activeIds[id]) {
-          trackingMap.removeLayer(vehicleMarkers[id]);
-          delete vehicleMarkers[id];
-        }
+        if (!activeIds[id]) { trackingMap.removeLayer(vehicleMarkers[id]); delete vehicleMarkers[id]; }
       });
-      // Fit bounds on first load
       if (vehicles.length > 0 && !selectedVehicleId) {
         var bounds = [];
         vehicles.forEach(function(v) {
-          if (v.position && !(v.position.latitude === 0 && v.position.longitude === 0)) {
+          if (v.position && !(v.position.latitude === 0 && v.position.longitude === 0))
             bounds.push([v.position.latitude, v.position.longitude]);
-          }
         });
-        if (bounds.length > 0) {
-          trackingMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-        }
+        if (bounds.length > 0) trackingMap.fitBounds(bounds, { padding: [50,50], maxZoom: 15 });
       }
     }
 
     function buildPopupContent(v) {
       var pos = v.position;
-      var speedText = pos.speed + ' km/h';
-      var timeText = pos.fixTime ? new Date(pos.fixTime).toLocaleString('pt-BR') : '-';
-      var addressText = pos.address || 'Endereco nao disponivel';
       var streetViewUrl = 'https://www.google.com/maps?layer=c&cbll=' + pos.latitude + ',' + pos.longitude;
-
       return '<div>' +
         '<div class="popup-title">' + escapeHtml(v.name) + '</div>' +
         '<div class="popup-meta">' +
-          '<div class="popup-speed">' + speedText + '</div>' +
-          '<div>' + addressText + '</div>' +
-          '<div>Atualizado: ' + timeText + '</div>' +
+          '<div class="popup-speed">' + pos.speed + ' km/h</div>' +
+          '<div>' + (pos.address || 'Endereco nao disponivel') + '</div>' +
+          '<div>Atualizado: ' + (pos.fixTime ? new Date(pos.fixTime).toLocaleString('pt-BR') : '-') + '</div>' +
           '<div>Lat: ' + pos.latitude.toFixed(5) + ' / Lng: ' + pos.longitude.toFixed(5) + '</div>' +
         '</div>' +
-        '<a href="' + streetViewUrl + '" target="_blank" class="btn-street-view">' +
-          '&#128065; Ver Rua (Street View)' +
-        '</a>' +
-        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + pos.latitude + ',' + pos.longitude + '" target="_blank" class="btn-street-view" style="background:linear-gradient(135deg,#4183ef,#6366f1);margin-left:4px;">' +
-          '&#128204; Rota ate aqui' +
-        '</a>' +
+        '<a href="' + streetViewUrl + '" target="_blank" class="btn-street-view">&#128065; Ver Rua (Street View)</a>' +
+        '<a href="https://www.google.com/maps/dir/?api=1&destination=' + pos.latitude + ',' + pos.longitude + '" target="_blank" class="btn-street-view" style="background:linear-gradient(135deg,#4183ef,#6366f1);margin-left:4px;">&#128204; Rota ate aqui</a>' +
       '</div>';
     }
 
-    function escapeHtml(text) {
-      var d = document.createElement('div');
-      d.textContent = text;
-      return d.innerHTML;
-    }
+    function escapeHtml(text) { var d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
 
     function renderVehicleList(vehicles) {
       var container = document.getElementById('vehicle-list');
+      if (!container) return;
       var searchTerm = (document.getElementById('tracking-search').value || '').toLowerCase();
-      var filtered = vehicles;
-      if (searchTerm) {
-        filtered = vehicles.filter(function(v) {
-          return v.name.toLowerCase().indexOf(searchTerm) !== -1 ||
-                 (v.uniqueId && v.uniqueId.indexOf(searchTerm) !== -1);
-        });
-      }
+      var filtered = searchTerm ? vehicles.filter(function(v) {
+        return v.name.toLowerCase().indexOf(searchTerm) !== -1 || (v.uniqueId && v.uniqueId.indexOf(searchTerm) !== -1);
+      }) : vehicles;
       document.getElementById('tracking-count').textContent = filtered.length;
 
       if (filtered.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:#64748b;padding:40px 16px;font-size:13px;">Nenhum veiculo encontrado</div>';
+        container.innerHTML = '<div style="text-align:center;padding:40px 16px;">' +
+          '<div class="gps-waiting-icon">&#128752;</div>' +
+          '<div style="color:#f1f5f9;font-size:15px;font-weight:600;margin-bottom:8px;">Aguardando sinal GPS</div>' +
+          '<div style="color:#94a3b8;font-size:13px;line-height:1.6;">' +
+            'Os dispositivos cadastrados estao conectados mas ainda aguardando localizacao GPS.' +
+          '</div>' +
+          '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:14px;text-align:left;margin-top:14px;">' +
+            '<div style="color:#f59e0b;font-weight:700;font-size:12px;margin-bottom:8px;">POR QUE ISSO ACONTECE?</div>' +
+            '<div style="color:#cbd5e1;font-size:12px;line-height:1.6;">' +
+              '1. O rastreador precisa estar em <b style="color:#f1f5f9;">area aberta</b> (ceu visivel)<br>' +
+              '2. O primeiro sinal GPS pode levar <b style="color:#f1f5f9;">1 a 5 minutos</b><br>' +
+              '3. Dentro de garagens/galpoes o GPS nao funciona<br>' +
+              '4. Assim que houver sinal, o veiculo aparecera aqui <b style="color:#22c55e;">automaticamente</b>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
+            '<span class="dot-pulse"><span></span><span></span><span></span></span>' +
+            '<span style="color:#4183ef;font-size:12px;font-weight:600;">Verificando a cada 5 segundos...</span>' +
+          '</div>' +
+        '</div>';
         return;
       }
 
       container.innerHTML = filtered.map(function(v) {
         var pos = v.position;
         var hasRealPos = pos && !(pos.latitude === 0 && pos.longitude === 0);
-        var moving = hasRealPos && pos.speed > 2;
         var statusClass = v.status === 'online' ? 'online' : (v.status === 'offline' ? 'offline' : 'unknown');
         var speedText = hasRealPos ? (pos.speed + ' km/h') : (v.status === 'online' ? 'Sem GPS' : '-');
         var addressText = hasRealPos && pos.address ? pos.address : (v.status === 'online' && !hasRealPos ? 'Aguardando sinal GPS...' : '');
         var isActive = v.deviceId == selectedVehicleId ? ' active' : '';
-
         return '<div class="vehicle-card' + isActive + '" onclick="selectVehicle(' + v.deviceId + ')">' +
           '<div class="v-name"><span class="v-status ' + statusClass + '"></span>' + escapeHtml(v.name) + '</div>' +
           '<div class="v-meta">' +
@@ -2408,56 +2478,44 @@
       }).join('');
     }
 
-    function filterVehicles() {
-      renderVehicleList(allVehicleData);
-    }
+    function filterVehicles() { renderVehicleList(allVehicleData); }
 
     function selectVehicle(deviceId) {
       selectedVehicleId = deviceId;
       var v = allVehicleData.find(function(x) { return x.deviceId == deviceId; });
-      if (v && v.position) {
-        trackingMap.setView([v.position.latitude, v.position.longitude], 16, { animate: true });
-        var marker = vehicleMarkers[deviceId];
-        if (marker) marker.openPopup();
+      if (v && v.position && mapReady) {
+        var pos = v.position;
+        if (!(pos.latitude === 0 && pos.longitude === 0)) {
+          trackingMap.setView([pos.latitude, pos.longitude], 16, { animate: true });
+          var marker = vehicleMarkers[deviceId];
+          if (marker) marker.openPopup();
+        }
       }
-      // Load trail for this vehicle
-      loadVehicleTrail(deviceId);
-      // Re-render list to highlight
+      if (mapReady) loadVehicleTrail(deviceId);
       renderVehicleList(allVehicleData);
     }
 
     async function loadVehicleTrail(deviceId) {
-      // Remove previous trail
+      if (!trackingMap) return;
       Object.keys(vehicleTrails).forEach(function(id) {
-        trackingMap.removeLayer(vehicleTrails[id]);
+        try { trackingMap.removeLayer(vehicleTrails[id]); } catch(e) {}
         delete vehicleTrails[id];
       });
       try {
-        var resp = await fetch(API_URL + '/tracking/trail/' + deviceId, {
-          headers: { 'Authorization': 'Bearer ' + authToken },
-        });
+        var resp = await fetch(API_URL + '/tracking/trail/' + deviceId, { headers: { 'Authorization': 'Bearer ' + authToken } });
         if (!resp.ok) return;
         var trail = await resp.json();
         if (trail.length < 2) return;
         var latlngs = trail.map(function(p) { return [p.lat, p.lng]; });
-        var polyline = L.polyline(latlngs, {
-          color: '#4183ef',
-          weight: 3,
-          opacity: 0.7,
-          dashArray: '8, 6',
-        }).addTo(trackingMap);
-        vehicleTrails[deviceId] = polyline;
-      } catch (err) {
-        console.error('Trail error:', err);
-      }
+        vehicleTrails[deviceId] = L.polyline(latlngs, { color: '#4183ef', weight: 3, opacity: 0.7, dashArray: '8, 6' }).addTo(trackingMap);
+      } catch (err) { console.error('Trail error:', err); }
     }
 
     function updateTrackingStats(vehicles) {
       var moving = 0, stopped = 0;
       vehicles.forEach(function(v) {
         var pos = v.position;
-        var hasRealPos = pos && !(pos.latitude === 0 && pos.longitude === 0);
-        if (hasRealPos && pos.speed > 2) moving++;
+        if (pos && !(pos.latitude === 0 && pos.longitude === 0) && pos.speed > 2) moving++;
         else stopped++;
       });
       document.getElementById('stat-moving').textContent = moving;
