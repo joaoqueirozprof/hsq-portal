@@ -1116,117 +1116,12 @@
     .password-toggle:hover { color: #94a3b8; }
     .password-toggle svg { width: 20px; height: 20px; }
 
-    /* Animated Map Background with Vehicles */
-    .login-map-bg {
+    /* Canvas Map Background */
+    #login-map-canvas {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
       pointer-events: none;
-      overflow: hidden;
-      opacity: 0.12;
-    }
-    .map-road {
-      position: absolute;
-      background: rgba(65,131,239,0.5);
-      border-radius: 2px;
-    }
-    .map-road-h1 { top: 30%; left: 0; width: 100%; height: 2px; }
-    .map-road-h2 { top: 55%; left: 0; width: 100%; height: 2px; }
-    .map-road-h3 { top: 78%; left: 0; width: 100%; height: 1.5px; }
-    .map-road-v1 { top: 0; left: 20%; width: 2px; height: 100%; }
-    .map-road-v2 { top: 0; left: 50%; width: 2px; height: 100%; }
-    .map-road-v3 { top: 0; left: 75%; width: 1.5px; height: 100%; }
-    .map-road-d1 { top: 0; left: 10%; width: 1.5px; height: 140%; transform: rotate(35deg); transform-origin: top left; }
-    .map-road-d2 { top: 10%; left: 60%; width: 1.5px; height: 120%; transform: rotate(-25deg); transform-origin: top left; }
-    .map-block {
-      position: absolute;
-      border: 1px solid rgba(65,131,239,0.25);
-      border-radius: 3px;
-      background: rgba(65,131,239,0.03);
-    }
-    .map-block-1 { top: 32%; left: 22%; width: 26%; height: 21%; }
-    .map-block-2 { top: 32%; left: 52%; width: 21%; height: 21%; }
-    .map-block-3 { top: 57%; left: 22%; width: 26%; height: 19%; }
-    .map-block-4 { top: 57%; left: 52%; width: 21%; height: 19%; }
-    .map-block-5 { top: 10%; left: 5%; width: 13%; height: 18%; }
-    .map-block-6 { top: 10%; left: 77%; width: 18%; height: 18%; }
-
-    /* Map Pin Points */
-    .map-pin {
-      position: absolute;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #4183ef;
-      box-shadow: 0 0 8px rgba(65,131,239,0.6);
-      animation: pinPulse 3s ease-in-out infinite;
-    }
-    .map-pin::after {
-      content: '';
-      position: absolute;
-      top: -4px; left: -4px;
-      width: 16px; height: 16px;
-      border-radius: 50%;
-      border: 1px solid rgba(65,131,239,0.4);
-      animation: pinRing 3s ease-out infinite;
-    }
-    @keyframes pinPulse {
-      0%, 100% { transform: scale(1); opacity: 0.8; }
-      50% { transform: scale(1.3); opacity: 1; }
-    }
-    @keyframes pinRing {
-      0% { transform: scale(1); opacity: 0.6; }
-      100% { transform: scale(2.5); opacity: 0; }
-    }
-    .map-pin-1 { top: 28%; left: 35%; animation-delay: 0s; }
-    .map-pin-2 { top: 53%; left: 62%; animation-delay: 1s; }
-    .map-pin-3 { top: 76%; left: 25%; animation-delay: 2s; }
-    .map-pin-4 { top: 15%; left: 80%; animation-delay: 0.5s; }
-
-    /* Animated Vehicles on Map */
-    .map-vehicle {
-      position: absolute;
-      font-size: 14px;
-      filter: drop-shadow(0 0 4px rgba(34,197,94,0.5));
-      z-index: 2;
-    }
-    .map-vehicle-1 { animation: vehicleDrive1 10s linear infinite; }
-    .map-vehicle-2 { animation: vehicleDrive2 14s linear infinite; }
-    .map-vehicle-3 { animation: vehicleDrive3 12s linear infinite; }
-    .map-vehicle-4 { animation: vehicleDrive4 16s linear infinite; }
-    @keyframes vehicleDrive1 {
-      0% { top: 29.5%; left: -3%; }
-      30% { top: 29.5%; left: 18%; }
-      35% { top: 29.5%; left: 19%; }
-      65% { top: 29.5%; left: 48%; }
-      70% { top: 29.5%; left: 49%; }
-      100% { top: 29.5%; left: 103%; }
-    }
-    @keyframes vehicleDrive2 {
-      0% { top: 54.5%; left: 103%; }
-      40% { top: 54.5%; left: 51%; }
-      45% { top: 54.5%; left: 50%; }
-      100% { top: 54.5%; left: -3%; }
-    }
-    @keyframes vehicleDrive3 {
-      0% { top: -3%; left: 19.5%; }
-      25% { top: 28%; left: 19.5%; }
-      30% { top: 30%; left: 19.5%; }
-      60% { top: 53%; left: 19.5%; }
-      65% { top: 55%; left: 19.5%; }
-      100% { top: 103%; left: 19.5%; }
-    }
-    @keyframes vehicleDrive4 {
-      0% { top: 77.5%; left: -3%; }
-      100% { top: 77.5%; left: 103%; }
-    }
-
-    /* Vehicle trail effect */
-    .map-vehicle::after {
-      content: '';
-      position: absolute;
-      top: 50%; left: -20px;
-      width: 18px; height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(34,197,94,0.4));
-      transform: translateY(-50%);
+      z-index: 1;
     }
 
     /* GPS Waiting Animations */
@@ -1378,35 +1273,8 @@
     <!-- GPS Floating Particles -->
     <div class="gps-particles" id="gps-particles"></div>
 
-    <!-- Animated Map with Vehicles -->
-    <div class="login-map-bg">
-      <!-- Roads -->
-      <div class="map-road map-road-h1"></div>
-      <div class="map-road map-road-h2"></div>
-      <div class="map-road map-road-h3"></div>
-      <div class="map-road map-road-v1"></div>
-      <div class="map-road map-road-v2"></div>
-      <div class="map-road map-road-v3"></div>
-      <div class="map-road map-road-d1"></div>
-      <div class="map-road map-road-d2"></div>
-      <!-- Blocks -->
-      <div class="map-block map-block-1"></div>
-      <div class="map-block map-block-2"></div>
-      <div class="map-block map-block-3"></div>
-      <div class="map-block map-block-4"></div>
-      <div class="map-block map-block-5"></div>
-      <div class="map-block map-block-6"></div>
-      <!-- Pins -->
-      <div class="map-pin map-pin-1"></div>
-      <div class="map-pin map-pin-2"></div>
-      <div class="map-pin map-pin-3"></div>
-      <div class="map-pin map-pin-4"></div>
-      <!-- Vehicles driving -->
-      <div class="map-vehicle map-vehicle-1">&#128663;</div>
-      <div class="map-vehicle map-vehicle-2">&#128666;</div>
-      <div class="map-vehicle map-vehicle-3">&#128665;</div>
-      <div class="map-vehicle map-vehicle-4">&#128656;</div>
-    </div>
+    <!-- Canvas Map with Animated Vehicles -->
+    <canvas id="login-map-canvas"></canvas>
 
     <div class="login-container">
       <div class="login-card">
@@ -1882,6 +1750,213 @@
       }
       for (var i = 0; i < 15; i++) { setTimeout(createParticle, i * 300); }
       setInterval(function() { if (container.children.length < 20) createParticle(); }, 800);
+    })();
+
+    // ==================== ANIMATED MAP CANVAS ====================
+    (function() {
+      var canvas = document.getElementById('login-map-canvas');
+      if (!canvas) return;
+      var ctx = canvas.getContext('2d');
+      var W, H;
+
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      // Road network
+      var roads = [];
+      function genRoads() {
+        roads = [];
+        // Horizontal roads
+        var hSpacing = H / 7;
+        for (var i = 1; i <= 6; i++) {
+          var y = hSpacing * i + (Math.random() - 0.5) * 20;
+          roads.push({ x1: 0, y1: y, x2: W, y2: y, dir: 'h' });
+        }
+        // Vertical roads
+        var vSpacing = W / 8;
+        for (var i = 1; i <= 7; i++) {
+          var x = vSpacing * i + (Math.random() - 0.5) * 20;
+          roads.push({ x1: x, y1: 0, x2: x, y2: H, dir: 'v' });
+        }
+      }
+      genRoads();
+
+      // Vehicles
+      var vehicles = [];
+      var vColors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+      function spawnVehicle() {
+        var road = roads[Math.floor(Math.random() * roads.length)];
+        var speed = 0.4 + Math.random() * 1.2;
+        var color = vColors[Math.floor(Math.random() * vColors.length)];
+        var size = 4 + Math.random() * 4;
+        if (road.dir === 'h') {
+          var goRight = Math.random() > 0.5;
+          vehicles.push({
+            x: goRight ? -20 : W + 20,
+            y: road.y1 + (Math.random() - 0.5) * 4,
+            vx: goRight ? speed : -speed,
+            vy: 0,
+            color: color,
+            size: size,
+            trail: [],
+            life: 0
+          });
+        } else {
+          var goDown = Math.random() > 0.5;
+          vehicles.push({
+            x: road.x1 + (Math.random() - 0.5) * 4,
+            y: goDown ? -20 : H + 20,
+            vx: 0,
+            vy: goDown ? speed : -speed,
+            color: color,
+            size: size,
+            trail: [],
+            life: 0
+          });
+        }
+      }
+      for (var i = 0; i < 8; i++) spawnVehicle();
+
+      // GPS Pins
+      var pins = [];
+      for (var i = 0; i < 5; i++) {
+        pins.push({
+          x: W * 0.1 + Math.random() * W * 0.8,
+          y: H * 0.1 + Math.random() * H * 0.8,
+          phase: Math.random() * Math.PI * 2,
+          color: vColors[Math.floor(Math.random() * vColors.length)]
+        });
+      }
+
+      var time = 0;
+      function draw() {
+        time += 0.016;
+        ctx.clearRect(0, 0, W, H);
+
+        // Draw road grid
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(65,131,239,0.12)';
+        roads.forEach(function(r) {
+          ctx.beginPath();
+          ctx.moveTo(r.x1, r.y1);
+          ctx.lineTo(r.x2, r.y2);
+          ctx.stroke();
+        });
+
+        // Draw blocks (rectangles between roads)
+        ctx.fillStyle = 'rgba(65,131,239,0.02)';
+        ctx.strokeStyle = 'rgba(65,131,239,0.06)';
+        ctx.lineWidth = 0.5;
+        for (var i = 0; i < roads.length; i++) {
+          for (var j = i + 1; j < roads.length; j++) {
+            if (roads[i].dir === 'h' && roads[j].dir === 'h') {
+              var y1 = roads[i].y1, y2 = roads[j].y1;
+              if (Math.abs(y2 - y1) < H / 4 && Math.abs(y2 - y1) > 30) {
+                for (var k = 0; k < roads.length; k++) {
+                  for (var l = k + 1; l < roads.length; l++) {
+                    if (roads[k].dir === 'v' && roads[l].dir === 'v') {
+                      var x1 = roads[k].x1, x2 = roads[l].x1;
+                      if (Math.abs(x2 - x1) < W / 5 && Math.abs(x2 - x1) > 40) {
+                        ctx.fillRect(Math.min(x1, x2) + 3, Math.min(y1, y2) + 3, Math.abs(x2 - x1) - 6, Math.abs(y2 - y1) - 6);
+                        ctx.strokeRect(Math.min(x1, x2) + 3, Math.min(y1, y2) + 3, Math.abs(x2 - x1) - 6, Math.abs(y2 - y1) - 6);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Draw GPS Pins with pulsing rings
+        pins.forEach(function(pin) {
+          var pulse = Math.sin(time * 2 + pin.phase) * 0.5 + 0.5;
+          // Outer ring
+          ctx.beginPath();
+          ctx.arc(pin.x, pin.y, 12 + pulse * 15, 0, Math.PI * 2);
+          ctx.strokeStyle = pin.color.replace(')', ',0.15)').replace('rgb', 'rgba').replace('#', '');
+          // Convert hex to rgba for ring
+          var r = parseInt(pin.color.slice(1,3),16), g = parseInt(pin.color.slice(3,5),16), b = parseInt(pin.color.slice(5,7),16);
+          ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.2 * (1 - pulse)) + ')';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          // Inner dot
+          ctx.beginPath();
+          ctx.arc(pin.x, pin.y, 3 + pulse * 2, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.5 + pulse * 0.3) + ')';
+          ctx.fill();
+          // Glow
+          ctx.shadowColor = pin.color;
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(pin.x, pin.y, 2, 0, Math.PI * 2);
+          ctx.fillStyle = pin.color;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        });
+
+        // Update and draw vehicles
+        vehicles.forEach(function(v) {
+          v.x += v.vx;
+          v.y += v.vy;
+          v.life++;
+          // Store trail
+          if (v.life % 2 === 0) {
+            v.trail.push({ x: v.x, y: v.y });
+            if (v.trail.length > 40) v.trail.shift();
+          }
+          // Draw trail
+          if (v.trail.length > 1) {
+            for (var t = 1; t < v.trail.length; t++) {
+              var alpha = (t / v.trail.length) * 0.4;
+              var r = parseInt(v.color.slice(1,3),16), g = parseInt(v.color.slice(3,5),16), b = parseInt(v.color.slice(5,7),16);
+              ctx.beginPath();
+              ctx.moveTo(v.trail[t-1].x, v.trail[t-1].y);
+              ctx.lineTo(v.trail[t].x, v.trail[t].y);
+              ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+              ctx.lineWidth = v.size * 0.5;
+              ctx.stroke();
+            }
+          }
+          // Draw vehicle dot
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, v.size, 0, Math.PI * 2);
+          ctx.fillStyle = v.color;
+          ctx.shadowColor = v.color;
+          ctx.shadowBlur = 12;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          // Inner bright core
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, v.size * 0.4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = 0.7;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+
+        // Remove off-screen vehicles and respawn
+        vehicles = vehicles.filter(function(v) {
+          return v.x > -50 && v.x < W + 50 && v.y > -50 && v.y < H + 50;
+        });
+        if (vehicles.length < 10 && Math.random() < 0.03) spawnVehicle();
+
+        requestAnimationFrame(draw);
+      }
+      draw();
+
+      // Regenerate roads on resize
+      window.addEventListener('resize', function() {
+        genRoads();
+        pins.forEach(function(p) {
+          p.x = W * 0.1 + Math.random() * W * 0.8;
+          p.y = H * 0.1 + Math.random() * H * 0.8;
+        });
+      });
     })();
 
     // ==================== PASSWORD TOGGLE ====================
