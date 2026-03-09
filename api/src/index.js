@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
 const adminRoutes = require('./routes/admin');
 const trackingRoutes = require('./routes/tracking');
+const geocodeRoutes = require('./routes/geocode');
 
 const app = express();
 app.set("trust proxy", 1);
@@ -45,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tracking', trackingRoutes);
+app.use('/api/geocode', geocodeRoutes);
 
 // Health check
 app.get('/api/health', async (req, res) => {

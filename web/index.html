@@ -3189,7 +3189,7 @@
       }
     }
 
-    // ====== REVERSE GEOCODING (Nominatim / OpenStreetMap) ======
+    // ====== REVERSE GEOCODING (via server-side proxy) ======
     var _geocodeCache = {};
     var _geocodeQueue = [];
     var _geocodeProcessing = false;
@@ -3205,46 +3205,26 @@
       if (_geocodeProcessing || _geocodeQueue.length === 0) return;
       _geocodeProcessing = true;
       var item = _geocodeQueue.shift();
-      // Rate limit: 1 req/sec for Nominatim
-      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + item.lat + '&lon=' + item.lng + '&zoom=18&addressdetails=1&accept-language=pt-BR', {
-        headers: { 'User-Agent': 'HSQRastreamento/1.0' }
+      var token = localStorage.getItem('hsq_token');
+      // Use server-side proxy instead of Nominatim directly
+      fetch('/api/geocode?lat=' + item.lat + '&lng=' + item.lng, {
+        headers: { 'Authorization': 'Bearer ' + token }
       })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        var addr = formatAddress(data);
+        var addr = data.address || 'Endereço não disponível';
         _geocodeCache[item.key] = addr;
         item.cb(addr);
         _geocodeProcessing = false;
-        // Wait 1.1s before next request (Nominatim rate limit)
-        setTimeout(processGeocodeQueue, 1100);
+        // Small delay between requests (server handles Nominatim rate limit)
+        setTimeout(processGeocodeQueue, 200);
       })
       .catch(function() {
         _geocodeCache[item.key] = 'Endereço não disponível';
         item.cb(_geocodeCache[item.key]);
         _geocodeProcessing = false;
-        setTimeout(processGeocodeQueue, 1100);
+        setTimeout(processGeocodeQueue, 200);
       });
-    }
-
-    function formatAddress(data) {
-      if (!data || !data.address) return data && data.display_name ? data.display_name : 'Endereço não disponível';
-      var a = data.address;
-      var parts = [];
-      // Street + number
-      if (a.road) {
-        var street = a.road;
-        if (a.house_number) street += ', ' + a.house_number;
-        parts.push(street);
-      }
-      // Neighborhood
-      if (a.suburb || a.neighbourhood) parts.push(a.suburb || a.neighbourhood);
-      // City
-      if (a.city || a.town || a.village || a.municipality) {
-        var city = a.city || a.town || a.village || a.municipality;
-        if (a.state) city += ' - ' + a.state;
-        parts.push(city);
-      }
-      return parts.length > 0 ? parts.join(', ') : (data.display_name || 'Endereço não disponível');
     }
 
     // Geocode all vehicles and update UI
