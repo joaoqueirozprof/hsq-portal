@@ -3261,20 +3261,11 @@
 
       var layers = window._mapLayers;
       if (layers[current]) {
-        if (current === 'hybrid') {
-          layers[current].eachLayer(function(l) { trackingMap.removeLayer(l); });
-          trackingMap.removeLayer(layers[current]);
-        } else {
-          trackingMap.removeLayer(layers[current]);
-        }
+        trackingMap.removeLayer(layers[current]);
       }
 
       // Add new layer
-      if (layerName === 'hybrid') {
-        layers[layerName].addTo(trackingMap);
-      } else {
-        layers[layerName].addTo(trackingMap);
-      }
+      layers[layerName].addTo(trackingMap);
       window._currentLayer = layerName;
 
       // Update buttons
