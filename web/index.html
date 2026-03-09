@@ -1241,6 +1241,41 @@
     .streetview-header .sv-btn.sv-close { background: rgba(239,68,68,0.3); border-color: rgba(239,68,68,0.5); }
     .streetview-header .sv-btn.sv-close:hover { background: rgba(239,68,68,0.5); }
     .streetview-iframe { flex: 1; border: none; width: 100%; }
+    .streetview-content { flex: 1; position: relative; width: 100%; }
+    #streetview-minimap { width: 100%; height: 100%; }
+    .sv-open-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.35);
+      z-index: 10;
+      gap: 12px;
+    }
+    .sv-open-overlay .sv-open-btn {
+      background: linear-gradient(135deg, #4183ef, #6366f1);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      box-shadow: 0 4px 20px rgba(65,131,239,0.4);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sv-open-overlay .sv-open-btn:hover { transform: scale(1.05); box-shadow: 0 6px 25px rgba(65,131,239,0.6); }
+    .sv-open-overlay .sv-coords {
+      color: rgba(255,255,255,0.7);
+      font-size: 12px;
+      font-family: 'Space Grotesk', monospace;
+    }
 
     /* Map Layer Toggle */
     .map-layer-control {
@@ -1801,7 +1836,13 @@
               <button class="sv-btn sv-close" onclick="closeStreetView()">&#10005; Fechar</button>
             </div>
           </div>
-          <iframe class="streetview-iframe" id="streetview-iframe" src="" allowfullscreen></iframe>
+          <div class="streetview-content" id="streetview-content">
+            <div id="streetview-minimap"></div>
+            <div class="sv-open-overlay" id="sv-open-overlay">
+              <button class="sv-open-btn" onclick="openStreetViewExternal()">&#128694; Abrir Street View Interativo</button>
+              <span class="sv-coords" id="sv-coords"></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -3238,33 +3279,62 @@
     // ====== STREET VIEW ======
     var streetViewLat = null, streetViewLng = null, streetViewName = '';
 
+    var streetViewMiniMap = null;
+
     function openStreetViewForVehicle(lat, lng, name) {
       streetViewLat = lat;
       streetViewLng = lng;
       streetViewName = name || '';
 
       var panel = document.getElementById('streetview-panel');
-      var iframe = document.getElementById('streetview-iframe');
       var nameEl = document.getElementById('sv-location-name');
-
-      // Use Google Maps embed - standard format (works without API key)
-      iframe.src = 'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d500!2d' + lng + '!3d' + lat + '!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1spt-BR!2sbr';
+      var coordsEl = document.getElementById('sv-coords');
 
       nameEl.textContent = name ? ('- ' + name) : '';
+      coordsEl.textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
       panel.classList.add('active');
 
-      // Resize map to fit
+      // Initialize or update the satellite minimap
       setTimeout(function() {
         if (trackingMap) trackingMap.invalidateSize();
-      }, 350);
+
+        setTimeout(function() {
+          if (!streetViewMiniMap) {
+            streetViewMiniMap = L.map('streetview-minimap', {
+              center: [lat, lng],
+              zoom: 18,
+              zoomControl: false,
+              attributionControl: false,
+            });
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+              maxZoom: 19,
+            }).addTo(streetViewMiniMap);
+            // Add street names overlay
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19, subdomains: ['a','b','c'], opacity: 0.35,
+            }).addTo(streetViewMiniMap);
+          } else {
+            streetViewMiniMap.setView([lat, lng], 18);
+          }
+          // Add a marker for the vehicle
+          if (window._svMarker) streetViewMiniMap.removeLayer(window._svMarker);
+          window._svMarker = L.marker([lat, lng]).addTo(streetViewMiniMap);
+          streetViewMiniMap.invalidateSize();
+        }, 200);
+      }, 100);
     }
 
     function closeStreetView() {
       var panel = document.getElementById('streetview-panel');
-      var iframe = document.getElementById('streetview-iframe');
       panel.classList.remove('active', 'expanded');
-      iframe.src = '';
       document.getElementById('sv-expand-btn').innerHTML = '&#8597; Expandir';
+
+      // Destroy minimap to free resources
+      if (streetViewMiniMap) {
+        streetViewMiniMap.remove();
+        streetViewMiniMap = null;
+        window._svMarker = null;
+      }
 
       // Resize map back
       setTimeout(function() {
