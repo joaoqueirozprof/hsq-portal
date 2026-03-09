@@ -68,7 +68,52 @@ class TraccarService {
       administrator: false,
       disabled: false,
       deviceLimit: 10,
+      deviceReadonly: true,
+      limitCommands: true,
     });
+  }
+
+  // ---- Device Management ----
+
+  async getAllDevices() {
+    return this.request('GET', '/api/devices');
+  }
+
+  async getDevice(deviceId) {
+    return this.request('GET', `/api/devices/${deviceId}`);
+  }
+
+  async createDevice(name, uniqueId, category = null) {
+    return this.request('POST', '/api/devices', {
+      name,
+      uniqueId,
+      category: category || null,
+      disabled: false,
+      groupId: 0,
+    });
+  }
+
+  async updateDevice(deviceId, data) {
+    const device = await this.request('GET', `/api/devices/${deviceId}`);
+    Object.assign(device, data);
+    return this.request('PUT', `/api/devices/${deviceId}`, device);
+  }
+
+  async deleteDevice(deviceId) {
+    return this.request('DELETE', `/api/devices/${deviceId}`);
+  }
+
+  async linkDeviceToUser(userId, deviceId) {
+    return this.request('POST', '/api/permissions', { userId, deviceId });
+  }
+
+  async unlinkDeviceFromUser(userId, deviceId) {
+    return this.request('DELETE', '/api/permissions', { userId, deviceId });
+  }
+
+  async getPositions(deviceId = null) {
+    const path = deviceId ? `/api/positions?deviceId=${deviceId}` : '/api/positions';
+    return this.request('GET', path);
   }
 
   // Update user password

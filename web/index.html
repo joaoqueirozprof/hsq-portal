@@ -872,6 +872,10 @@
           <div class="stat-label" style="color:#22c55e;">Online Agora</div>
           <div class="stat-value" id="stat-online" style="color:#22c55e;">-</div>
         </div>
+        <div class="stat-card" style="border-color:rgba(139,92,246,0.3);">
+          <div class="stat-label" style="color:#a78bfa;">Dispositivos</div>
+          <div class="stat-value" id="stat-devices" style="color:#a78bfa;">-</div>
+        </div>
       </div>
 
       <!-- Online Users Section -->
@@ -912,6 +916,99 @@
           </table>
         </div>
       </div>
+
+      <!-- Devices Management Panel -->
+      <div class="panel-card" style="margin-top:24px;">
+        <div class="panel-header">
+          <h3>Gerenciar Dispositivos</h3>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <button class="action-btn btn-edit" onclick="loadDevices()" style="font-size:12px;">Atualizar</button>
+            <button class="btn-add" onclick="showNewDeviceModal()">+ Novo Dispositivo</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Identificador (IMEI)</th>
+                <th>Categoria</th>
+                <th>Status</th>
+                <th>Cliente Vinculado</th>
+                <th>Ultima Posicao</th>
+                <th>Acoes</th>
+              </tr>
+            </thead>
+            <tbody id="devices-table-body">
+              <tr><td colspan="7" style="text-align:center;color:#64748b;padding:40px;">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== NEW DEVICE MODAL ======== -->
+  <div id="modal-new-device" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-title">Novo Dispositivo</div>
+      <form onsubmit="handleCreateDevice(event)">
+        <div id="device-create-error" class="error-msg"></div>
+        <div class="form-group">
+          <label>Nome do Dispositivo</label>
+          <input type="text" id="device-name" placeholder="Ex: Caminhao 01" required>
+        </div>
+        <div class="form-group">
+          <label>Identificador (IMEI)</label>
+          <input type="text" id="device-imei" placeholder="Ex: 353027080123456" required>
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="device-category">
+            <option value="">Nenhuma</option>
+            <option value="car">Carro</option>
+            <option value="truck">Caminhao</option>
+            <option value="bus">Onibus</option>
+            <option value="motorcycle">Moto</option>
+            <option value="van">Van</option>
+            <option value="boat">Barco</option>
+            <option value="person">Pessoa</option>
+            <option value="animal">Animal</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Vincular a Cliente (opcional)</label>
+          <select id="device-client-select">
+            <option value="">Sem vinculo</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:24px;">
+          <button type="button" class="btn-secondary" style="margin-top:0" onclick="closeModal('modal-new-device')">Cancelar</button>
+          <button type="submit" class="btn-primary" id="btn-create-device">Criar Dispositivo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======== ASSIGN DEVICE MODAL ======== -->
+  <div id="modal-assign-device" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-title">Vincular Dispositivo</div>
+      <div id="assign-device-info" style="color:#94a3b8;margin-bottom:16px;"></div>
+      <form onsubmit="handleAssignDevice(event)">
+        <div id="assign-error" class="error-msg"></div>
+        <input type="hidden" id="assign-device-id">
+        <div class="form-group">
+          <label>Selecionar Cliente</label>
+          <select id="assign-client-select" required>
+            <option value="">Selecione um cliente</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:24px;">
+          <button type="button" class="btn-secondary" style="margin-top:0" onclick="closeModal('modal-assign-device')">Cancelar</button>
+          <button type="submit" class="btn-primary" id="btn-assign-device">Vincular</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1312,6 +1409,7 @@
       }
       loadClients();
       loadOnlineUsers();
+      loadDevices();
     }
 
     async function loadOnlineUsers() {
@@ -1627,6 +1725,202 @@
       currentUser = null;
       window._traccarCreds = null;
       showPage('page-login');
+    }
+
+    // ==================== DEVICES ====================
+    let allDevices = [];
+
+    async function loadDevices() {
+      var tbody = document.getElementById('devices-table-body');
+      if (!tbody) return;
+      try {
+        var resp = await fetch(API_URL + '/admin/devices', {
+          headers: { 'Authorization': 'Bearer ' + authToken },
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        allDevices = await resp.json();
+        document.getElementById('stat-devices').textContent = allDevices.length;
+        renderDevicesTable();
+      } catch (err) {
+        console.error('Load devices error:', err);
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;">Erro ao carregar dispositivos</td></tr>';
+      }
+    }
+
+    function renderDevicesTable() {
+      var tbody = document.getElementById('devices-table-body');
+      if (allDevices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:40px;">Nenhum dispositivo cadastrado</td></tr>';
+        return;
+      }
+      tbody.innerHTML = allDevices.map(function(d) {
+        var statusColor = d.status === 'online' ? '#22c55e' : (d.status === 'offline' ? '#ef4444' : '#64748b');
+        var statusText = d.status === 'online' ? 'Online' : (d.status === 'offline' ? 'Offline' : (d.status || 'Desconhecido'));
+        var clientInfo = d.client ? d.client.clientName : '<span style="color:#64748b;">Sem vinculo</span>';
+        var posInfo = '-';
+        if (d.position) {
+          posInfo = d.position.latitude.toFixed(4) + ', ' + d.position.longitude.toFixed(4);
+          if (d.position.speed > 0) posInfo += ' (' + Math.round(d.position.speed) + ' km/h)';
+        }
+        var lastUpdate = d.lastUpdate ? new Date(d.lastUpdate).toLocaleString('pt-BR') : '-';
+        var categoryLabels = {car:'Carro',truck:'Caminhao',bus:'Onibus',motorcycle:'Moto',van:'Van',boat:'Barco',person:'Pessoa',animal:'Animal'};
+
+        var actions = '';
+        if (d.client) {
+          actions += '<button class="action-btn btn-toggle-off" onclick="handleUnassignDevice(' + d.id + ', \'' + d.client.clientId + '\')">Desvincular</button>';
+        } else {
+          actions += '<button class="action-btn btn-edit" onclick="showAssignDeviceModal(' + d.id + ', \'' + (d.name||'').replace(/'/g,"\\'") + '\')">Vincular</button>';
+        }
+        actions += ' <button class="action-btn btn-toggle-off" onclick="handleDeleteDevice(' + d.id + ', \'' + (d.name||'').replace(/'/g,"\\'") + '\')" style="background:rgba(239,68,68,0.25);">Deletar</button>';
+
+        return '<tr>' +
+          '<td style="font-weight:600;color:#f1f5f9;">' + d.name + '</td>' +
+          '<td><code style="background:rgba(65,131,239,0.15);padding:2px 8px;border-radius:4px;color:#93c5fd;font-size:12px;">' + d.uniqueId + '</code></td>' +
+          '<td>' + (categoryLabels[d.category] || d.category || '-') + '</td>' +
+          '<td><span style="color:' + statusColor + ';font-weight:600;">' + statusText + '</span><br><span style="font-size:11px;color:#64748b;">' + lastUpdate + '</span></td>' +
+          '<td>' + clientInfo + '</td>' +
+          '<td style="font-size:12px;">' + posInfo + '</td>' +
+          '<td>' + actions + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    async function loadClientsForSelect(selectId) {
+      try {
+        var resp = await fetch(API_URL + '/admin/clients?limit=200', {
+          headers: { 'Authorization': 'Bearer ' + authToken },
+        });
+        var result = await resp.json();
+        var clients = result.data || [];
+        var select = document.getElementById(selectId);
+        var firstOpt = select.options[0];
+        select.innerHTML = '';
+        select.appendChild(firstOpt);
+        clients.forEach(function(c) {
+          var opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.name + ' (' + c.document + ')';
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Load clients for select error:', err);
+      }
+    }
+
+    function showNewDeviceModal() {
+      document.getElementById('modal-new-device').classList.add('show');
+      document.getElementById('device-create-error').classList.remove('show');
+      document.getElementById('device-name').value = '';
+      document.getElementById('device-imei').value = '';
+      document.getElementById('device-category').value = '';
+      loadClientsForSelect('device-client-select');
+    }
+
+    async function handleCreateDevice(e) {
+      e.preventDefault();
+      var errEl = document.getElementById('device-create-error');
+      errEl.classList.remove('show');
+      var btn = document.getElementById('btn-create-device');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Criando...';
+
+      try {
+        var body = {
+          name: document.getElementById('device-name').value,
+          uniqueId: document.getElementById('device-imei').value,
+          category: document.getElementById('device-category').value || null,
+          clientId: document.getElementById('device-client-select').value || null,
+        };
+        var resp = await fetch(API_URL + '/admin/devices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+          body: JSON.stringify(body),
+        });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro ao criar');
+        showToast('Dispositivo criado com sucesso!', 'success');
+        closeModal('modal-new-device');
+        loadDevices();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Criar Dispositivo';
+      }
+    }
+
+    function showAssignDeviceModal(deviceId, deviceName) {
+      document.getElementById('modal-assign-device').classList.add('show');
+      document.getElementById('assign-error').classList.remove('show');
+      document.getElementById('assign-device-id').value = deviceId;
+      document.getElementById('assign-device-info').textContent = 'Dispositivo: ' + deviceName;
+      loadClientsForSelect('assign-client-select');
+    }
+
+    async function handleAssignDevice(e) {
+      e.preventDefault();
+      var errEl = document.getElementById('assign-error');
+      errEl.classList.remove('show');
+      var btn = document.getElementById('btn-assign-device');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Vinculando...';
+
+      try {
+        var deviceId = document.getElementById('assign-device-id').value;
+        var clientId = document.getElementById('assign-client-select').value;
+        if (!clientId) throw new Error('Selecione um cliente');
+
+        var resp = await fetch(API_URL + '/admin/devices/' + deviceId + '/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+          body: JSON.stringify({ clientId: clientId }),
+        });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro ao vincular');
+        showToast(data.message, 'success');
+        closeModal('modal-assign-device');
+        loadDevices();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Vincular';
+      }
+    }
+
+    async function handleUnassignDevice(deviceId, clientId) {
+      if (!confirm('Desvincular este dispositivo do cliente?')) return;
+      try {
+        var resp = await fetch(API_URL + '/admin/devices/' + deviceId + '/unassign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+          body: JSON.stringify({ clientId: clientId }),
+        });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro');
+        showToast(data.message, 'success');
+        loadDevices();
+      } catch (err) {
+        showToast('Erro ao desvincular: ' + err.message, 'error');
+      }
+    }
+
+    async function handleDeleteDevice(deviceId, deviceName) {
+      if (!confirm('ATENCAO: Deseja DELETAR o dispositivo "' + deviceName + '"?\n\nEsta acao NAO pode ser desfeita!')) return;
+      try {
+        var resp = await fetch(API_URL + '/admin/devices/' + deviceId, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + authToken },
+        });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro');
+        showToast(data.message, 'success');
+        loadDevices();
+      } catch (err) {
+        showToast('Erro ao deletar: ' + err.message, 'error');
+      }
     }
 
     // ==================== INIT ====================

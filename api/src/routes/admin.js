@@ -373,5 +373,236 @@ router.get('/online-users', async (req, res) => {
 });
 
 
+// ============ DEVICE MANAGEMENT ============
+
+// GET /api/admin/devices - List all devices with client assignments
+router.get('/devices', async (req, res) => {
+  try {
+    const db = req.app.locals.db;
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+
+    // Get all devices from Traccar
+    const devices = await traccar.getAllDevices();
+
+    // Get all clients with their traccar_user_id
+    const clientsResult = await db.query('SELECT id, name, document, traccar_user_id FROM clients WHERE traccar_user_id IS NOT NULL');
+    const clientsByTraccarId = {};
+    for (const c of clientsResult.rows) {
+      clientsByTraccarId[c.traccar_user_id] = c;
+    }
+
+    // Get all non-admin users from Traccar to map devices to clients
+    const users = await traccar.getUsers();
+    const nonAdminUsers = users.filter(u => !u.administrator);
+
+    // For each non-admin user, get their devices and build mapping
+    const deviceToClient = {};
+    for (const user of nonAdminUsers) {
+      try {
+        const userDevices = await traccar.getUserDevices(user.id);
+        const client = clientsByTraccarId[user.id];
+        if (client) {
+          for (const d of userDevices) {
+            deviceToClient[d.id] = {
+              clientId: client.id,
+              clientName: client.name,
+              clientDocument: client.document,
+              traccarUserId: user.id,
+            };
+          }
+        }
+      } catch (e) {
+        // Skip users that fail
+      }
+    }
+
+    // Get latest positions
+    let positions = [];
+    try {
+      positions = await traccar.getPositions();
+    } catch (e) { /* ignore */ }
+    const positionsByDevice = {};
+    for (const p of positions) {
+      positionsByDevice[p.deviceId] = p;
+    }
+
+    // Enrich devices
+    const enriched = devices.map(d => {
+      const assignment = deviceToClient[d.id] || null;
+      const pos = positionsByDevice[d.id] || null;
+      return {
+        id: d.id,
+        name: d.name,
+        uniqueId: d.uniqueId,
+        category: d.category,
+        status: d.status,
+        disabled: d.disabled,
+        lastUpdate: d.lastUpdate,
+        client: assignment,
+        position: pos ? {
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          speed: pos.speed,
+          fixTime: pos.fixTime,
+        } : null,
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    console.error('List devices error:', err.message);
+    res.status(500).json({ error: 'Erro ao listar dispositivos' });
+  }
+});
+
+// POST /api/admin/devices - Create device
+router.post('/devices', async (req, res) => {
+  try {
+    const { name, uniqueId, category, clientId } = req.body;
+
+    if (!name || !uniqueId) {
+      return res.status(400).json({ error: 'Nome e identificador (IMEI) são obrigatórios' });
+    }
+
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const device = await traccar.createDevice(name, uniqueId, category);
+
+    // If clientId provided, link device to client's Traccar user
+    if (clientId) {
+      const db = req.app.locals.db;
+      const clientResult = await db.query('SELECT traccar_user_id FROM clients WHERE id = $1', [clientId]);
+      if (clientResult.rows.length > 0 && clientResult.rows[0].traccar_user_id) {
+        await traccar.linkDeviceToUser(clientResult.rows[0].traccar_user_id, device.id);
+      }
+    }
+
+    const db = req.app.locals.db;
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      ['admin', req.user.id, 'device_created', JSON.stringify({ deviceId: device.id, name, uniqueId })]
+    );
+
+    res.status(201).json(device);
+  } catch (err) {
+    console.error('Create device error:', err.message);
+    const msg = err.response?.data?.message || err.message;
+    res.status(400).json({ error: 'Erro ao criar dispositivo: ' + msg });
+  }
+});
+
+// PUT /api/admin/devices/:id - Update device
+router.put('/devices/:id', async (req, res) => {
+  try {
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const { name, uniqueId, category, disabled } = req.body;
+
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (uniqueId !== undefined) updates.uniqueId = uniqueId;
+    if (category !== undefined) updates.category = category;
+    if (disabled !== undefined) updates.disabled = disabled;
+
+    const device = await traccar.updateDevice(parseInt(req.params.id), updates);
+
+    const db = req.app.locals.db;
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      ['admin', req.user.id, 'device_updated', JSON.stringify({ deviceId: req.params.id, updates })]
+    );
+
+    res.json(device);
+  } catch (err) {
+    console.error('Update device error:', err.message);
+    res.status(500).json({ error: 'Erro ao atualizar dispositivo' });
+  }
+});
+
+// DELETE /api/admin/devices/:id - Delete device
+router.delete('/devices/:id', async (req, res) => {
+  try {
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    await traccar.deleteDevice(parseInt(req.params.id));
+
+    const db = req.app.locals.db;
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      ['admin', req.user.id, 'device_deleted', JSON.stringify({ deviceId: req.params.id })]
+    );
+
+    res.json({ message: 'Dispositivo deletado' });
+  } catch (err) {
+    console.error('Delete device error:', err.message);
+    res.status(500).json({ error: 'Erro ao deletar dispositivo' });
+  }
+});
+
+// POST /api/admin/devices/:id/assign - Assign device to client
+router.post('/devices/:id/assign', async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) {
+      return res.status(400).json({ error: 'clientId é obrigatório' });
+    }
+
+    const db = req.app.locals.db;
+    const clientResult = await db.query('SELECT id, name, traccar_user_id FROM clients WHERE id = $1', [clientId]);
+    if (clientResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const client = clientResult.rows[0];
+    if (!client.traccar_user_id) {
+      return res.status(400).json({ error: 'Cliente não tem usuário Traccar vinculado' });
+    }
+
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    await traccar.linkDeviceToUser(client.traccar_user_id, parseInt(req.params.id));
+
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      ['admin', req.user.id, 'device_assigned', JSON.stringify({ deviceId: req.params.id, clientId, clientName: client.name })]
+    );
+
+    res.json({ message: `Dispositivo vinculado a ${client.name}` });
+  } catch (err) {
+    console.error('Assign device error:', err.message);
+    res.status(500).json({ error: 'Erro ao vincular dispositivo' });
+  }
+});
+
+// POST /api/admin/devices/:id/unassign - Unassign device from client
+router.post('/devices/:id/unassign', async (req, res) => {
+  try {
+    const { clientId } = req.body;
+    if (!clientId) {
+      return res.status(400).json({ error: 'clientId é obrigatório' });
+    }
+
+    const db = req.app.locals.db;
+    const clientResult = await db.query('SELECT id, name, traccar_user_id FROM clients WHERE id = $1', [clientId]);
+    if (clientResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Cliente não encontrado' });
+    }
+
+    const client = clientResult.rows[0];
+    if (!client.traccar_user_id) {
+      return res.status(400).json({ error: 'Cliente não tem usuário Traccar vinculado' });
+    }
+
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    await traccar.unlinkDeviceFromUser(client.traccar_user_id, parseInt(req.params.id));
+
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+      ['admin', req.user.id, 'device_unassigned', JSON.stringify({ deviceId: req.params.id, clientId })]
+    );
+
+    res.json({ message: 'Dispositivo desvinculado' });
+  } catch (err) {
+    console.error('Unassign device error:', err.message);
+    res.status(500).json({ error: 'Erro ao desvincular dispositivo' });
+  }
+});
+
 module.exports = router;
 
