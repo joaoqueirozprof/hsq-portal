@@ -277,9 +277,9 @@
     }
     .logo-radar-container {
       position: relative;
-      width: 160px;
-      height: 160px;
-      margin: 0 auto 18px;
+      width: 210px;
+      height: 210px;
+      margin: 0 auto 20px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -316,9 +316,9 @@
     }
 
     .login-logo img {
-      width: 96px;
-      height: 96px;
-      border-radius: 22px;
+      width: 130px;
+      height: 130px;
+      border-radius: 26px;
       position: relative;
       z-index: 2;
       box-shadow:
@@ -1766,70 +1766,100 @@
       resize();
       window.addEventListener('resize', resize);
 
+      // Vehicle emoji types with labels
+      var vehicleTypes = [
+        { emoji: '\uD83D\uDE97', name: 'carro', size: 24 },     // car
+        { emoji: '\uD83D\uDE99', name: 'suv', size: 24 },       // SUV
+        { emoji: '\uD83D\uDE9A', name: 'caminhao', size: 28 },  // truck
+        { emoji: '\uD83D\uDE9B', name: 'carreta', size: 28 },   // semi
+        { emoji: '\uD83C\uDFCD\uFE0F', name: 'moto', size: 22 },// motorcycle
+        { emoji: '\uD83D\uDE95', name: 'taxi', size: 24 },      // taxi
+        { emoji: '\uD83D\uDE90', name: 'van', size: 26 },       // van
+        { emoji: '\uD83D\uDE8C', name: 'onibus', size: 28 },    // bus
+      ];
+      var trailColors = ['#22c55e', '#3b82f6', '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899'];
+
       // Road network
-      var roads = [];
+      var hRoads = [], vRoads = [];
       function genRoads() {
-        roads = [];
-        // Horizontal roads
-        var hSpacing = H / 7;
-        for (var i = 1; i <= 6; i++) {
-          var y = hSpacing * i + (Math.random() - 0.5) * 20;
-          roads.push({ x1: 0, y1: y, x2: W, y2: y, dir: 'h' });
+        hRoads = []; vRoads = [];
+        var hCount = Math.max(4, Math.floor(H / 140));
+        var vCount = Math.max(5, Math.floor(W / 180));
+        for (var i = 0; i < hCount; i++) {
+          var y = (H / (hCount + 1)) * (i + 1);
+          hRoads.push(y);
         }
-        // Vertical roads
-        var vSpacing = W / 8;
-        for (var i = 1; i <= 7; i++) {
-          var x = vSpacing * i + (Math.random() - 0.5) * 20;
-          roads.push({ x1: x, y1: 0, x2: x, y2: H, dir: 'v' });
+        for (var i = 0; i < vCount; i++) {
+          var x = (W / (vCount + 1)) * (i + 1);
+          vRoads.push(x);
         }
       }
       genRoads();
 
       // Vehicles
       var vehicles = [];
-      var vColors = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
       function spawnVehicle() {
-        var road = roads[Math.floor(Math.random() * roads.length)];
-        var speed = 0.4 + Math.random() * 1.2;
-        var color = vColors[Math.floor(Math.random() * vColors.length)];
-        var size = 4 + Math.random() * 4;
-        if (road.dir === 'h') {
+        var type = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
+        var color = trailColors[Math.floor(Math.random() * trailColors.length)];
+        var speed = 0.6 + Math.random() * 1.5;
+        var isH = Math.random() > 0.35; // more horizontal vehicles
+        if (isH) {
+          var road = hRoads[Math.floor(Math.random() * hRoads.length)];
           var goRight = Math.random() > 0.5;
           vehicles.push({
-            x: goRight ? -20 : W + 20,
-            y: road.y1 + (Math.random() - 0.5) * 4,
+            x: goRight ? -40 : W + 40,
+            y: road,
             vx: goRight ? speed : -speed,
             vy: 0,
+            type: type,
             color: color,
-            size: size,
             trail: [],
-            life: 0
+            flipH: !goRight
           });
         } else {
+          var road = vRoads[Math.floor(Math.random() * vRoads.length)];
           var goDown = Math.random() > 0.5;
           vehicles.push({
-            x: road.x1 + (Math.random() - 0.5) * 4,
-            y: goDown ? -20 : H + 20,
+            x: road,
+            y: goDown ? -40 : H + 40,
             vx: 0,
             vy: goDown ? speed : -speed,
+            type: type,
             color: color,
-            size: size,
             trail: [],
-            life: 0
+            flipH: false
           });
         }
       }
-      for (var i = 0; i < 8; i++) spawnVehicle();
+      // Start with several vehicles already on screen
+      for (var i = 0; i < 12; i++) {
+        spawnVehicle();
+        // Place them randomly on screen instead of edges
+        var v = vehicles[vehicles.length - 1];
+        if (v.vx !== 0) v.x = Math.random() * W;
+        else v.y = Math.random() * H;
+      }
 
-      // GPS Pins
+      // GPS Pins at intersections
       var pins = [];
-      for (var i = 0; i < 5; i++) {
-        pins.push({
-          x: W * 0.1 + Math.random() * W * 0.8,
-          y: H * 0.1 + Math.random() * H * 0.8,
-          phase: Math.random() * Math.PI * 2,
-          color: vColors[Math.floor(Math.random() * vColors.length)]
-        });
+      function genPins() {
+        pins = [];
+        for (var i = 0; i < 6; i++) {
+          pins.push({
+            x: vRoads[Math.floor(Math.random() * vRoads.length)] + (Math.random()-0.5)*60,
+            y: hRoads[Math.floor(Math.random() * hRoads.length)] + (Math.random()-0.5)*60,
+            phase: Math.random() * Math.PI * 2,
+            color: trailColors[Math.floor(Math.random() * trailColors.length)]
+          });
+        }
+      }
+      genPins();
+
+      function hexToRgb(hex) {
+        var r = parseInt(hex.slice(1,3),16);
+        var g = parseInt(hex.slice(3,5),16);
+        var b = parseInt(hex.slice(5,7),16);
+        return { r:r, g:g, b:b };
       }
 
       var time = 0;
@@ -1837,63 +1867,78 @@
         time += 0.016;
         ctx.clearRect(0, 0, W, H);
 
-        // Draw road grid
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(65,131,239,0.12)';
-        roads.forEach(function(r) {
-          ctx.beginPath();
-          ctx.moveTo(r.x1, r.y1);
-          ctx.lineTo(r.x2, r.y2);
-          ctx.stroke();
+        // Draw roads with dashed center lines
+        ctx.setLineDash([]);
+        // Road surfaces (wider, dark)
+        ctx.lineWidth = 18;
+        ctx.strokeStyle = 'rgba(30,41,59,0.4)';
+        hRoads.forEach(function(y) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
         });
-
-        // Draw blocks (rectangles between roads)
-        ctx.fillStyle = 'rgba(65,131,239,0.02)';
-        ctx.strokeStyle = 'rgba(65,131,239,0.06)';
+        vRoads.forEach(function(x) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+        });
+        // Road edges
         ctx.lineWidth = 0.5;
-        for (var i = 0; i < roads.length; i++) {
-          for (var j = i + 1; j < roads.length; j++) {
-            if (roads[i].dir === 'h' && roads[j].dir === 'h') {
-              var y1 = roads[i].y1, y2 = roads[j].y1;
-              if (Math.abs(y2 - y1) < H / 4 && Math.abs(y2 - y1) > 30) {
-                for (var k = 0; k < roads.length; k++) {
-                  for (var l = k + 1; l < roads.length; l++) {
-                    if (roads[k].dir === 'v' && roads[l].dir === 'v') {
-                      var x1 = roads[k].x1, x2 = roads[l].x1;
-                      if (Math.abs(x2 - x1) < W / 5 && Math.abs(x2 - x1) > 40) {
-                        ctx.fillRect(Math.min(x1, x2) + 3, Math.min(y1, y2) + 3, Math.abs(x2 - x1) - 6, Math.abs(y2 - y1) - 6);
-                        ctx.strokeRect(Math.min(x1, x2) + 3, Math.min(y1, y2) + 3, Math.abs(x2 - x1) - 6, Math.abs(y2 - y1) - 6);
-                      }
-                    }
-                  }
-                }
-              }
+        ctx.strokeStyle = 'rgba(65,131,239,0.15)';
+        hRoads.forEach(function(y) {
+          ctx.beginPath(); ctx.moveTo(0, y - 9); ctx.lineTo(W, y - 9); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, y + 9); ctx.lineTo(W, y + 9); ctx.stroke();
+        });
+        vRoads.forEach(function(x) {
+          ctx.beginPath(); ctx.moveTo(x - 9, 0); ctx.lineTo(x - 9, H); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(x + 9, 0); ctx.lineTo(x + 9, H); ctx.stroke();
+        });
+        // Center dashed lines
+        ctx.setLineDash([12, 8]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(65,131,239,0.2)';
+        hRoads.forEach(function(y) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        });
+        vRoads.forEach(function(x) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Draw city blocks
+        for (var i = 0; i < hRoads.length - 1; i++) {
+          for (var j = 0; j < vRoads.length - 1; j++) {
+            var bx = vRoads[j] + 12;
+            var by = hRoads[i] + 12;
+            var bw = vRoads[j+1] - vRoads[j] - 24;
+            var bh = hRoads[i+1] - hRoads[i] - 24;
+            if (bw > 20 && bh > 20) {
+              ctx.fillStyle = 'rgba(65,131,239,0.015)';
+              ctx.strokeStyle = 'rgba(65,131,239,0.05)';
+              ctx.lineWidth = 0.5;
+              ctx.fillRect(bx, by, bw, bh);
+              ctx.strokeRect(bx, by, bw, bh);
             }
           }
         }
 
-        // Draw GPS Pins with pulsing rings
+        // Draw GPS Pins
         pins.forEach(function(pin) {
           var pulse = Math.sin(time * 2 + pin.phase) * 0.5 + 0.5;
-          // Outer ring
+          var rgb = hexToRgb(pin.color);
+          // Expanding ring
           ctx.beginPath();
-          ctx.arc(pin.x, pin.y, 12 + pulse * 15, 0, Math.PI * 2);
-          ctx.strokeStyle = pin.color.replace(')', ',0.15)').replace('rgb', 'rgba').replace('#', '');
-          // Convert hex to rgba for ring
-          var r = parseInt(pin.color.slice(1,3),16), g = parseInt(pin.color.slice(3,5),16), b = parseInt(pin.color.slice(5,7),16);
-          ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.2 * (1 - pulse)) + ')';
+          ctx.arc(pin.x, pin.y, 8 + pulse * 20, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (0.3 * (1 - pulse)) + ')';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Second ring
+          ctx.beginPath();
+          ctx.arc(pin.x, pin.y, 4 + pulse * 10, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + (0.4 * (1 - pulse * 0.5)) + ')';
           ctx.lineWidth = 1.5;
           ctx.stroke();
-          // Inner dot
-          ctx.beginPath();
-          ctx.arc(pin.x, pin.y, 3 + pulse * 2, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (0.5 + pulse * 0.3) + ')';
-          ctx.fill();
-          // Glow
+          // Core pin
           ctx.shadowColor = pin.color;
-          ctx.shadowBlur = 10;
+          ctx.shadowBlur = 15;
           ctx.beginPath();
-          ctx.arc(pin.x, pin.y, 2, 0, Math.PI * 2);
+          ctx.arc(pin.x, pin.y, 4, 0, Math.PI * 2);
           ctx.fillStyle = pin.color;
           ctx.fill();
           ctx.shadowBlur = 0;
@@ -1903,59 +1948,62 @@
         vehicles.forEach(function(v) {
           v.x += v.vx;
           v.y += v.vy;
-          v.life++;
-          // Store trail
-          if (v.life % 2 === 0) {
-            v.trail.push({ x: v.x, y: v.y });
-            if (v.trail.length > 40) v.trail.shift();
-          }
-          // Draw trail
-          if (v.trail.length > 1) {
+          // Trail
+          v.trail.push({ x: v.x, y: v.y });
+          if (v.trail.length > 50) v.trail.shift();
+
+          // Draw trail (glowing line behind vehicle)
+          if (v.trail.length > 2) {
+            var rgb = hexToRgb(v.color);
             for (var t = 1; t < v.trail.length; t++) {
-              var alpha = (t / v.trail.length) * 0.4;
-              var r = parseInt(v.color.slice(1,3),16), g = parseInt(v.color.slice(3,5),16), b = parseInt(v.color.slice(5,7),16);
+              var alpha = (t / v.trail.length) * 0.5;
               ctx.beginPath();
               ctx.moveTo(v.trail[t-1].x, v.trail[t-1].y);
               ctx.lineTo(v.trail[t].x, v.trail[t].y);
-              ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
-              ctx.lineWidth = v.size * 0.5;
+              ctx.strokeStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + alpha + ')';
+              ctx.lineWidth = 3;
               ctx.stroke();
             }
+            // Trail glow at end
+            ctx.shadowColor = v.color;
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.3)';
+            ctx.fill();
+            ctx.shadowBlur = 0;
           }
-          // Draw vehicle dot
-          ctx.beginPath();
-          ctx.arc(v.x, v.y, v.size, 0, Math.PI * 2);
-          ctx.fillStyle = v.color;
-          ctx.shadowColor = v.color;
-          ctx.shadowBlur = 12;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-          // Inner bright core
-          ctx.beginPath();
-          ctx.arc(v.x, v.y, v.size * 0.4, 0, Math.PI * 2);
-          ctx.fillStyle = '#ffffff';
-          ctx.globalAlpha = 0.7;
-          ctx.fill();
-          ctx.globalAlpha = 1;
+
+          // Draw vehicle emoji
+          ctx.save();
+          ctx.translate(v.x, v.y);
+          if (v.flipH) { ctx.scale(-1, 1); }
+          // If moving vertically, rotate 90deg
+          if (v.vx === 0) {
+            ctx.rotate(v.vy > 0 ? Math.PI / 2 : -Math.PI / 2);
+          }
+          ctx.font = v.type.size + 'px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(v.type.emoji, 0, 0);
+          ctx.restore();
         });
 
-        // Remove off-screen vehicles and respawn
+        // Remove off-screen, respawn
         vehicles = vehicles.filter(function(v) {
-          return v.x > -50 && v.x < W + 50 && v.y > -50 && v.y < H + 50;
+          return v.x > -60 && v.x < W + 60 && v.y > -60 && v.y < H + 60;
         });
-        if (vehicles.length < 10 && Math.random() < 0.03) spawnVehicle();
+        // Keep 10-15 vehicles active
+        if (vehicles.length < 10) spawnVehicle();
+        if (vehicles.length < 12 && Math.random() < 0.02) spawnVehicle();
 
         requestAnimationFrame(draw);
       }
       draw();
 
-      // Regenerate roads on resize
       window.addEventListener('resize', function() {
         genRoads();
-        pins.forEach(function(p) {
-          p.x = W * 0.1 + Math.random() * W * 0.8;
-          p.y = H * 0.1 + Math.random() * H * 0.8;
-        });
+        genPins();
       });
     })();
 
