@@ -9,6 +9,7 @@ const { Pool } = require('pg');
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
 const adminRoutes = require('./routes/admin');
+const trackingRoutes = require('./routes/tracking');
 
 const app = express();
 app.set("trust proxy", 1);
@@ -43,6 +44,7 @@ app.use('/api/auth', limiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 // Health check
 app.get('/api/health', async (req, res) => {
