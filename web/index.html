@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HSQ Rastreamento - Portal</title>
+  <link rel="icon" type="image/png" href="/logo-login.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -256,8 +257,8 @@
       background: rgba(8, 15, 30, 0.85);
       backdrop-filter: blur(40px) saturate(1.5);
       border: 1px solid rgba(65, 131, 239, 0.12);
-      border-radius: 28px;
-      padding: 44px 40px 40px;
+      border-radius: 24px;
+      padding: 24px 32px 28px;
       box-shadow:
         0 30px 80px rgba(0,0,0,0.6),
         0 0 1px rgba(65,131,239,0.3),
@@ -272,14 +273,14 @@
     /* Logo with radar rings */
     .login-logo {
       text-align: center;
-      margin-bottom: 28px;
+      margin-bottom: 12px;
       position: relative;
     }
     .logo-radar-container {
       position: relative;
-      width: 210px;
-      height: 210px;
-      margin: 0 auto 20px;
+      width: 160px;
+      height: 160px;
+      margin: 0 auto 10px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -316,9 +317,9 @@
     }
 
     .login-logo img {
-      width: 130px;
-      height: 130px;
-      border-radius: 26px;
+      width: 100px;
+      height: 100px;
+      border-radius: 22px;
       position: relative;
       z-index: 2;
       box-shadow:
@@ -334,7 +335,7 @@
 
     .login-logo h1 {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 26px;
+      font-size: 22px;
       font-weight: 700;
       letter-spacing: -0.5px;
       background: linear-gradient(135deg, #ffffff 0%, #82b4ff 40%, #a5c4ff 60%, #ffffff 100%);
@@ -362,8 +363,8 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      margin-bottom: 24px;
-      padding: 8px 16px;
+      margin-bottom: 14px;
+      padding: 6px 14px;
       background: rgba(34,197,94,0.06);
       border: 1px solid rgba(34,197,94,0.12);
       border-radius: 50px;
@@ -388,20 +389,20 @@
     }
 
     .form-group {
-      margin-bottom: 18px;
+      margin-bottom: 12px;
     }
     .form-group label {
       display: block;
       font-size: 11px;
       font-weight: 600;
       color: #64748b;
-      margin-bottom: 7px;
+      margin-bottom: 5px;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
     .form-group input, .form-group select {
       width: 100%;
-      padding: 13px 16px;
+      padding: 10px 14px;
       background: rgba(15, 23, 42, 0.6);
       border: 1px solid rgba(71, 85, 105, 0.3);
       border-radius: 14px;
@@ -423,7 +424,7 @@
 
     .btn-primary {
       width: 100%;
-      padding: 14px;
+      padding: 11px;
       background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #4183ef 100%);
       background-size: 200% auto;
       border: none;
@@ -504,11 +505,11 @@
       border: 1px solid rgba(71, 85, 105, 0.15);
       border-radius: 14px;
       padding: 4px;
-      margin-bottom: 24px;
+      margin-bottom: 14px;
     }
     .login-tab {
       flex: 1;
-      padding: 10px;
+      padding: 8px;
       text-align: center;
       font-size: 12px;
       font-weight: 600;
@@ -1796,48 +1797,31 @@
       }
       genRoads();
 
-      // Vehicles
+      // Vehicles — only move HORIZONTALLY (emojis are designed to face left/right)
       var vehicles = [];
       function spawnVehicle() {
         var type = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
         var color = trailColors[Math.floor(Math.random() * trailColors.length)];
-        var speed = 0.6 + Math.random() * 1.5;
-        var isH = Math.random() > 0.35; // more horizontal vehicles
-        if (isH) {
-          var road = hRoads[Math.floor(Math.random() * hRoads.length)];
-          var goRight = Math.random() > 0.5;
-          vehicles.push({
-            x: goRight ? -40 : W + 40,
-            y: road,
-            vx: goRight ? speed : -speed,
-            vy: 0,
-            type: type,
-            color: color,
-            trail: [],
-            flipH: !goRight
-          });
-        } else {
-          var road = vRoads[Math.floor(Math.random() * vRoads.length)];
-          var goDown = Math.random() > 0.5;
-          vehicles.push({
-            x: road,
-            y: goDown ? -40 : H + 40,
-            vx: 0,
-            vy: goDown ? speed : -speed,
-            type: type,
-            color: color,
-            trail: [],
-            flipH: false
-          });
-        }
+        var speed = 0.4 + Math.random() * 1.2;
+        var road = hRoads[Math.floor(Math.random() * hRoads.length)];
+        var goRight = Math.random() > 0.5;
+        // Offset slightly from center line to simulate lanes
+        var laneOffset = goRight ? -4 : 4;
+        vehicles.push({
+          x: goRight ? -50 : W + 50,
+          y: road + laneOffset,
+          speed: speed,
+          direction: goRight ? 1 : -1, // 1 = right, -1 = left
+          type: type,
+          color: color,
+          trail: []
+        });
       }
-      // Start with several vehicles already on screen
+      // Start with vehicles already on screen
       for (var i = 0; i < 12; i++) {
         spawnVehicle();
-        // Place them randomly on screen instead of edges
         var v = vehicles[vehicles.length - 1];
-        if (v.vx !== 0) v.x = Math.random() * W;
-        else v.y = Math.random() * H;
+        v.x = Math.random() * W; // place randomly across width
       }
 
       // GPS Pins at intersections
@@ -1944,43 +1928,45 @@
           ctx.shadowBlur = 0;
         });
 
-        // Update and draw vehicles
+        // Update and draw vehicles (ALL horizontal movement only)
         vehicles.forEach(function(v) {
-          v.x += v.vx;
-          v.y += v.vy;
-          // Trail
+          // Move in the vehicle's direction
+          v.x += v.speed * v.direction;
+
+          // Trail (behind the vehicle)
           v.trail.push({ x: v.x, y: v.y });
-          if (v.trail.length > 50) v.trail.shift();
+          if (v.trail.length > 40) v.trail.shift();
 
           // Draw trail (glowing line behind vehicle)
           if (v.trail.length > 2) {
             var rgb = hexToRgb(v.color);
             for (var t = 1; t < v.trail.length; t++) {
-              var alpha = (t / v.trail.length) * 0.5;
+              var alpha = (t / v.trail.length) * 0.4;
               ctx.beginPath();
               ctx.moveTo(v.trail[t-1].x, v.trail[t-1].y);
               ctx.lineTo(v.trail[t].x, v.trail[t].y);
               ctx.strokeStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + alpha + ')';
-              ctx.lineWidth = 3;
+              ctx.lineWidth = 2.5;
               ctx.stroke();
             }
-            // Trail glow at end
+            // Glow at vehicle position
             ctx.shadowColor = v.color;
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 6;
             ctx.beginPath();
-            ctx.arc(v.x, v.y, 4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.3)';
+            ctx.arc(v.x, v.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.25)';
             ctx.fill();
             ctx.shadowBlur = 0;
           }
 
-          // Draw vehicle emoji
+          // Draw vehicle emoji — facing the correct direction
+          // Emojis naturally face LEFT, so:
+          //   going RIGHT (direction=1) → flip horizontally (scale -1,1)
+          //   going LEFT (direction=-1) → draw normally (no flip)
           ctx.save();
           ctx.translate(v.x, v.y);
-          if (v.flipH) { ctx.scale(-1, 1); }
-          // If moving vertically, rotate 90deg
-          if (v.vx === 0) {
-            ctx.rotate(v.vy > 0 ? Math.PI / 2 : -Math.PI / 2);
+          if (v.direction === 1) {
+            ctx.scale(-1, 1); // flip so emoji faces right
           }
           ctx.font = v.type.size + 'px serif';
           ctx.textAlign = 'center';
@@ -1989,13 +1975,13 @@
           ctx.restore();
         });
 
-        // Remove off-screen, respawn
+        // Remove off-screen vehicles and respawn
         vehicles = vehicles.filter(function(v) {
-          return v.x > -60 && v.x < W + 60 && v.y > -60 && v.y < H + 60;
+          return v.x > -80 && v.x < W + 80;
         });
-        // Keep 10-15 vehicles active
-        if (vehicles.length < 10) spawnVehicle();
-        if (vehicles.length < 12 && Math.random() < 0.02) spawnVehicle();
+        // Keep 10-14 vehicles active at all times
+        while (vehicles.length < 10) spawnVehicle();
+        if (vehicles.length < 14 && Math.random() < 0.015) spawnVehicle();
 
         requestAnimationFrame(draw);
       }
