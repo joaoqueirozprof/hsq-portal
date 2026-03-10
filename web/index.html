@@ -2078,6 +2078,15 @@
                 <button class="btn-add" onclick="loadReplay()">Carregar Rota</button>
               </div>
             </div>
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+              <label style="color:#94a3b8;font-size:12px;">Mapa:</label>
+              <select id="replay-map-type" class="form-input" style="width:auto;padding:4px 10px;font-size:12px;" onchange="changeReplayMapType(this.value)">
+                <option value="satellite">Satelite</option>
+                <option value="streets">Ruas (OpenStreetMap)</option>
+                <option value="hybrid">Hibrido (Google)</option>
+                <option value="terrain">Terreno</option>
+              </select>
+            </div>
           </div>
           <div id="replay-map-container" style="height:500px;border-radius:12px;overflow:hidden;margin-top:16px;background:#1e293b;position:relative;">
             <div id="replay-map" style="width:100%;height:100%;"></div>
@@ -3719,6 +3728,9 @@
     var replayTimer = null;
     var replaySpeedMultiplier = 5;
 
+    var replayTileLayers = {};
+    var currentReplayTile = null;
+
     function initReplayTab() {
       // Populate device select
       populateDeviceSelect('replay-device-select');
@@ -3731,13 +3743,25 @@
       if (!replayMap) {
         setTimeout(function() {
           replayMap = L.map('replay-map', { zoomControl: true }).setView([-6.1, -38.2], 13);
-          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 19
-          }).addTo(replayMap);
+          // Create tile layers
+          replayTileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+          replayTileLayers.streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: 'OSM' });
+          replayTileLayers.hybrid = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: '0123' });
+          replayTileLayers.terrain = L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains: '0123' });
+          // Default: satellite
+          currentReplayTile = replayTileLayers.satellite;
+          currentReplayTile.addTo(replayMap);
         }, 200);
       } else {
         setTimeout(function() { replayMap.invalidateSize(); }, 200);
       }
+    }
+
+    function changeReplayMapType(type) {
+      if (!replayMap || !replayTileLayers[type]) return;
+      if (currentReplayTile) replayMap.removeLayer(currentReplayTile);
+      currentReplayTile = replayTileLayers[type];
+      currentReplayTile.addTo(replayMap);
     }
 
     function toLocalISO(d) {
@@ -3876,232 +3900,197 @@
     async function exportReplayVideo() {
       if (!replayData || replayData.length < 2) { showToast('Carregue uma rota primeiro', 'error'); return; }
 
-      // Create progress UI
       var progDiv = document.createElement('div');
       progDiv.className = 'export-progress';
-      progDiv.innerHTML = '<div style="color:#e2e8f0;font-size:16px;font-weight:600;">Exportando Video MP4...</div>' +
-        '<div style="color:#94a3b8;font-size:12px;margin-top:4px;" id="export-status">Carregando bibliotecas...</div>' +
+      progDiv.innerHTML = '<div style="color:#e2e8f0;font-size:16px;font-weight:600;">Exportando Video HD...</div>' +
+        '<div style="color:#94a3b8;font-size:12px;margin-top:4px;" id="export-status">Preparando...</div>' +
         '<div class="export-progress-bar"><div class="export-progress-fill" id="export-pbar" style="width:0%"></div></div>' +
-        '<button onclick="cancelVideoExport()" style="margin-top:12px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 14px;border-radius:8px;cursor:pointer;font-size:11px;">Cancelar</button>';
+        '<div style="color:#64748b;font-size:11px;margin-top:4px;" id="export-info">1280x720 HD | Zoom de rua</div>' +
+        '<button onclick="cancelVideoExport()" style="margin-top:8px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 14px;border-radius:8px;cursor:pointer;font-size:11px;">Cancelar</button>';
       document.getElementById('replay-map-container').appendChild(progDiv);
-
       window._exportCancelled = false;
 
-      // Load html2canvas if not loaded
+      // Load libs
       if (!window.html2canvas) {
+        document.getElementById('export-status').textContent = 'Carregando html2canvas...';
         try {
-          await new Promise(function(resolve, reject) {
-            var s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-            s.onload = resolve; s.onerror = reject;
-            document.head.appendChild(s);
-          });
-        } catch(e) {
-          progDiv.remove();
-          showToast('Erro ao carregar html2canvas', 'error');
-          return;
-        }
+          await new Promise(function(res, rej) { var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+        } catch(e) { progDiv.remove(); showToast('Erro html2canvas', 'error'); return; }
       }
-
-      // Load mp4-muxer for proper MP4 encoding (hosted locally)
       if (!window.Mp4Muxer) {
         try {
-          await new Promise(function(resolve, reject) {
-            var s = document.createElement('script');
-            s.src = '/mp4-muxer.min.js';
-            s.onload = resolve; s.onerror = reject;
-            document.head.appendChild(s);
-          });
-        } catch(e) {
-          console.warn('mp4-muxer not available, will fallback to WebM');
-        }
+          await new Promise(function(res, rej) { var s = document.createElement('script'); s.src = '/mp4-muxer.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+        } catch(e) { console.warn('mp4-muxer unavailable'); }
       }
 
-      document.getElementById('export-status').textContent = 'Capturando frames do mapa...';
-
-      var mapContainer = document.getElementById('replay-map');
+      // === HD VIDEO CONFIG ===
+      var captureW = 1280;
+      var captureH = 720;
+      var fps = 10;
+      var frameDuration = 1000000 / fps;
+      var streetZoom = 17;
       var totalPoints = replayData.length;
-      var maxFrames = 150;
+      var maxFrames = 300;
       var step = Math.max(1, Math.floor(totalPoints / maxFrames));
-      var captureW = 640;
-      var captureH = 360;
-      var fps = 5;
-      var frameDuration = 1000000 / fps; // microseconds
+      var mapContainer = document.getElementById('replay-map');
 
-      // Check if VideoEncoder is available (for MP4)
+      // Save original state
+      var origCenter = replayMap.getCenter();
+      var origZoom = replayMap.getZoom();
+
+      // Set street-level zoom for capture
+      document.getElementById('export-status').textContent = 'Configurando zoom de rua...';
+      replayMap.setView([replayData[0].lat, replayData[0].lng], streetZoom, { animate: false });
+      await new Promise(function(r) { setTimeout(r, 500); });
+      replayMap.invalidateSize();
+      await new Promise(function(r) { setTimeout(r, 500); });
+
+      // Setup encoder
       var canMP4 = typeof VideoEncoder !== 'undefined' && window.Mp4Muxer;
+      var encoder = null, muxer = null, recorder = null, chunks = [], outCanvas = null, outCtx = null, fileExt = 'mp4';
 
       if (canMP4) {
-        // ========== MP4 EXPORT with VideoEncoder + mp4-muxer ==========
         try {
-          var muxer = new Mp4Muxer.Muxer({
-            target: new Mp4Muxer.ArrayBufferTarget(),
-            video: {
-              codec: 'avc',
-              width: captureW,
-              height: captureH
-            },
-            fastStart: 'in-memory'
-          });
-
-          var encoder = new VideoEncoder({
+          muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: 'avc', width: captureW, height: captureH }, fastStart: 'in-memory' });
+          encoder = new VideoEncoder({
             output: function(chunk, meta) { muxer.addVideoChunk(chunk, meta); },
-            error: function(e) { console.error('Encoder error:', e); }
+            error: function(e) { console.error('Enc err:', e); }
           });
-
-          encoder.configure({
-            codec: 'avc1.42001f',
-            width: captureW,
-            height: captureH,
-            bitrate: 1500000,
-            framerate: fps
-          });
-
-          var frameCount = 0;
-          for (var i = 0; i < totalPoints && !window._exportCancelled; i += step) {
-            replayIndex = i;
-            updateReplayDisplay();
-            replayMap.setView([replayData[i].lat, replayData[i].lng], replayMap.getZoom(), { animate: false });
-            await new Promise(function(r) { setTimeout(r, 150); });
-
-            try {
-              var capturedCanvas = await html2canvas(mapContainer, {
-                useCORS: true, allowTaint: true, scale: 0.5, logging: false,
-                width: mapContainer.offsetWidth, height: mapContainer.offsetHeight
-              });
-              // Draw info bar
-              var ctx = capturedCanvas.getContext('2d');
-              var cw = capturedCanvas.width, ch = capturedCanvas.height;
-              ctx.fillStyle = 'rgba(15,23,42,0.85)';
-              ctx.fillRect(0, ch - 40, cw, 40);
-              ctx.fillStyle = '#22c55e';
-              ctx.font = 'bold 14px sans-serif';
-              ctx.fillText(Math.round(replayData[i].speed) + ' km/h', 10, ch - 14);
-              ctx.fillStyle = '#e2e8f0';
-              ctx.font = '12px sans-serif';
-              ctx.fillText('  ' + new Date(replayData[i].time).toLocaleString('pt-BR'), 90, ch - 14);
-              ctx.fillStyle = 'rgba(148,163,184,0.6)';
-              ctx.font = '10px sans-serif';
-              ctx.textAlign = 'right';
-              ctx.fillText('HSQ Rastreamento', cw - 8, ch - 14);
-              ctx.textAlign = 'left';
-
-              // Resize
-              var resized = document.createElement('canvas');
-              resized.width = captureW; resized.height = captureH;
-              resized.getContext('2d').drawImage(capturedCanvas, 0, 0, captureW, captureH);
-
-              var frame = new VideoFrame(resized, { timestamp: frameCount * frameDuration });
-              encoder.encode(frame, { keyFrame: frameCount % 30 === 0 });
-              frame.close();
-              frameCount++;
-            } catch(e) { console.warn('Frame error:', e); }
-
-            var pct = Math.round((i / totalPoints) * 100);
-            document.getElementById('export-pbar').style.width = pct + '%';
-            document.getElementById('export-status').textContent = 'Frame ' + frameCount + ' (' + pct + '%)';
-          }
-
-          if (window._exportCancelled) { encoder.close(); progDiv.remove(); return; }
-
-          document.getElementById('export-status').textContent = 'Finalizando MP4...';
-          document.getElementById('export-pbar').style.width = '95%';
-
-          await encoder.flush();
-          muxer.finalize();
-          var buffer = muxer.target.buffer;
-          var blob = new Blob([buffer], { type: 'video/mp4' });
-
-          progDiv.remove();
-          var url = URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          var devName = document.getElementById('replay-device-select');
-          var name = devName.options[devName.selectedIndex].textContent || 'replay';
-          a.href = url;
-          a.download = 'replay_' + name.replace(/[^a-zA-Z0-9]/g,'_') + '.mp4';
-          a.click();
-          setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
-          showToast('Video MP4 exportado com sucesso!', 'success');
-          return;
-        } catch(e) {
-          console.error('MP4 export error, falling back to WebM:', e);
-          // Fall through to WebM fallback
-        }
+          encoder.configure({ codec: 'avc1.640028', width: captureW, height: captureH, bitrate: 5000000, framerate: fps });
+        } catch(e) { canMP4 = false; console.warn('VideoEncoder fail:', e); }
+      }
+      if (!canMP4) {
+        fileExt = 'webm';
+        outCanvas = document.createElement('canvas'); outCanvas.width = captureW; outCanvas.height = captureH;
+        outCtx = outCanvas.getContext('2d');
+        var stream = outCanvas.captureStream(fps);
+        var mt = MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+        recorder = new MediaRecorder(stream, { mimeType: mt, videoBitsPerSecond: 5000000 });
+        recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.start();
       }
 
-      // ========== FALLBACK: WebM via MediaRecorder ==========
-      document.getElementById('export-status').textContent = 'Capturando frames (WebM)...';
-      var frames = [];
+      document.getElementById('export-status').textContent = 'Capturando frames HD...';
 
-      for (var i2 = 0; i2 < totalPoints && !window._exportCancelled; i2 += step) {
-        replayIndex = i2;
+      var frameCount = 0;
+      var devSel = document.getElementById('replay-device-select');
+      var devName = devSel.options[devSel.selectedIndex].textContent || 'Veiculo';
+
+      for (var i = 0; i < totalPoints && !window._exportCancelled; i += step) {
+        var pt = replayData[i];
+        replayIndex = i;
         updateReplayDisplay();
-        replayMap.setView([replayData[i2].lat, replayData[i2].lng], replayMap.getZoom(), { animate: false });
-        await new Promise(function(r) { setTimeout(r, 150); });
+
+        // Follow vehicle at street level
+        replayMap.setView([pt.lat, pt.lng], streetZoom, { animate: false });
+        // Wait for tiles to fully load
+        await new Promise(function(r) { setTimeout(r, 300); });
 
         try {
           var cap = await html2canvas(mapContainer, {
-            useCORS: true, allowTaint: true, scale: 0.5, logging: false,
-            width: mapContainer.offsetWidth, height: mapContainer.offsetHeight
+            useCORS: true, allowTaint: true, scale: 1.5, logging: false,
+            width: mapContainer.offsetWidth, height: mapContainer.offsetHeight, imageTimeout: 8000
           });
-          var c2 = cap.getContext('2d');
-          var cw2 = cap.width, ch2 = cap.height;
-          c2.fillStyle = 'rgba(15,23,42,0.85)';
-          c2.fillRect(0, ch2 - 40, cw2, 40);
-          c2.fillStyle = '#22c55e';
-          c2.font = 'bold 14px sans-serif';
-          c2.fillText(Math.round(replayData[i2].speed) + ' km/h', 10, ch2 - 14);
-          c2.fillStyle = '#e2e8f0';
-          c2.font = '12px sans-serif';
-          c2.fillText('  ' + new Date(replayData[i2].time).toLocaleString('pt-BR'), 90, ch2 - 14);
 
-          var rs = document.createElement('canvas');
-          rs.width = captureW; rs.height = captureH;
-          rs.getContext('2d').drawImage(cap, 0, 0, captureW, captureH);
-          frames.push(rs);
-        } catch(e) {}
+          // Create HD canvas
+          var hd = document.createElement('canvas'); hd.width = captureW; hd.height = captureH;
+          var hc = hd.getContext('2d');
+          hc.drawImage(cap, 0, 0, captureW, captureH);
 
-        var pct2 = Math.round((i2 / totalPoints) * 100);
-        document.getElementById('export-pbar').style.width = pct2 + '%';
-        document.getElementById('export-status').textContent = 'Frame ' + frames.length + ' (' + pct2 + '%)';
+          // Top bar: vehicle name + speed
+          hc.fillStyle = 'rgba(15,23,42,0.85)';
+          hc.fillRect(0, 0, captureW, 52);
+          hc.fillStyle = '#ffffff';
+          hc.font = 'bold 20px Arial, sans-serif';
+          hc.fillText(devName, 16, 34);
+          var speedVal = Math.round(pt.speed);
+          var speedColor = speedVal > 2 ? '#22c55e' : '#ef4444';
+          hc.fillStyle = speedColor;
+          hc.font = 'bold 28px Arial, sans-serif';
+          hc.textAlign = 'right';
+          hc.fillText(speedVal + ' km/h', captureW - 16, 38);
+          hc.textAlign = 'left';
+
+          // Bottom bar: time + watermark + progress
+          hc.fillStyle = 'rgba(15,23,42,0.85)';
+          hc.fillRect(0, captureH - 48, captureW, 48);
+          hc.fillStyle = '#e2e8f0';
+          hc.font = '15px Arial, sans-serif';
+          hc.fillText(new Date(pt.time).toLocaleString('pt-BR'), 16, captureH - 18);
+          hc.fillStyle = 'rgba(148,163,184,0.8)';
+          hc.font = 'bold 13px Arial, sans-serif';
+          hc.textAlign = 'right';
+          hc.fillText('HSQ Rastreamento', captureW - 16, captureH - 18);
+          hc.textAlign = 'left';
+
+          // Green progress bar at very bottom
+          var prog = i / totalPoints;
+          hc.fillStyle = '#22c55e';
+          hc.fillRect(0, captureH - 4, captureW * prog, 4);
+          hc.fillStyle = 'rgba(255,255,255,0.15)';
+          hc.fillRect(captureW * prog, captureH - 4, captureW * (1 - prog), 4);
+
+          if (canMP4) {
+            var vf = new VideoFrame(hd, { timestamp: frameCount * frameDuration });
+            encoder.encode(vf, { keyFrame: frameCount % 30 === 0 });
+            vf.close();
+          } else {
+            outCtx.drawImage(hd, 0, 0);
+            await new Promise(function(r) { setTimeout(r, 1000 / fps); });
+          }
+          frameCount++;
+        } catch(e) { console.warn('Frame ' + i + ' err:', e); }
+
+        var pct = Math.round((i / totalPoints) * 100);
+        document.getElementById('export-pbar').style.width = pct + '%';
+        document.getElementById('export-status').textContent = 'Frame ' + frameCount + '/' + Math.ceil(totalPoints/step) + ' (' + pct + '%)';
       }
 
-      if (window._exportCancelled || frames.length < 2) { progDiv.remove(); return; }
-
-      document.getElementById('export-status').textContent = 'Montando video...';
-      var outCanvas = document.createElement('canvas');
-      outCanvas.width = captureW; outCanvas.height = captureH;
-      var outCtx = outCanvas.getContext('2d');
-
-      var stream = outCanvas.captureStream(fps);
-      var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
-      var recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 2000000 });
-      var chunks = [];
-      recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
-
-      var videoReady = new Promise(function(resolve) {
-        recorder.onstop = function() { resolve(new Blob(chunks, { type: 'video/webm' })); };
-      });
-
-      recorder.start();
-      for (var f = 0; f < frames.length; f++) {
-        outCtx.drawImage(frames[f], 0, 0);
-        await new Promise(function(r) { setTimeout(r, 200); });
+      if (window._exportCancelled) {
+        if (encoder) try { encoder.close(); } catch(e) {}
+        if (recorder) try { recorder.stop(); } catch(e) {}
+        progDiv.remove();
+        replayMap.setView(origCenter, origZoom, { animate: false });
+        return;
       }
-      await new Promise(function(r) { setTimeout(r, 300); });
-      recorder.stop();
 
-      var videoBlob = await videoReady;
+      document.getElementById('export-status').textContent = 'Finalizando ' + fileExt.toUpperCase() + '...';
+      document.getElementById('export-pbar').style.width = '95%';
+
+      var blob;
+      if (canMP4) {
+        try {
+          await encoder.flush();
+          muxer.finalize();
+          blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+        } catch(e) {
+          progDiv.remove();
+          replayMap.setView(origCenter, origZoom, { animate: false });
+          showToast('Erro MP4: ' + e.message, 'error');
+          return;
+        }
+      } else {
+        await new Promise(function(r) { setTimeout(r, 300); });
+        recorder.stop();
+        blob = await new Promise(function(resolve) {
+          recorder.onstop = function() { resolve(new Blob(chunks, { type: 'video/webm' })); };
+        });
+      }
+
       progDiv.remove();
-      var url2 = URL.createObjectURL(videoBlob);
-      var a2 = document.createElement('a');
-      var devName2 = document.getElementById('replay-device-select');
-      var nm = devName2.options[devName2.selectedIndex].textContent || 'replay';
-      a2.href = url2;
-      a2.download = 'replay_' + nm.replace(/[^a-zA-Z0-9]/g,'_') + '.webm';
-      a2.click();
-      setTimeout(function() { URL.revokeObjectURL(url2); }, 10000);
-      showToast('Video exportado (WebM - seu navegador nao suporta MP4 direto)', 'success');
+      // Restore original view
+      replayMap.setView(origCenter, origZoom, { animate: false });
+      setTimeout(function() { replayMap.invalidateSize(); }, 200);
+
+      // Download file
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'replay_' + devName.replace(/[^a-zA-Z0-9]/g,'_') + '_HD.' + fileExt;
+      a.click();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 15000);
+      var sizeMB = (blob.size / (1024*1024)).toFixed(1);
+      showToast('Video HD exportado! (' + sizeMB + 'MB - ' + frameCount + ' frames - 1280x720)', 'success');
     }
 
     function cancelVideoExport() {
