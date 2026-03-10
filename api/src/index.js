@@ -65,6 +65,9 @@ app.get('/api/tracking/stream', (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
+  // Send 4KB padding to force proxy buffer flush (Hostinger host nginx buffers SSE)
+  const padding = ':' + ' '.repeat(4096) + '\n\n';
+  res.write(padding);
   res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Real-time tracking active' })}\n\n`);
 
   const keepalive = setInterval(() => {
@@ -131,8 +134,10 @@ async function getTraccarSession() {
 
 function broadcastToSSEClients(eventType, data) {
   const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+  // Add padding to ensure proxy buffer flush
+  const padded = payload + ':' + ' '.repeat(256) + '\n\n';
   sseClients.forEach(client => {
-    try { client.write(payload); } catch(e) { sseClients.delete(client); }
+    try { client.write(padded); } catch(e) { sseClients.delete(client); }
   });
 }
 
