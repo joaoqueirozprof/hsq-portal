@@ -3879,8 +3879,8 @@
       // Create progress UI
       var progDiv = document.createElement('div');
       progDiv.className = 'export-progress';
-      progDiv.innerHTML = '<div style="color:#e2e8f0;font-size:16px;font-weight:600;">Exportando Video...</div>' +
-        '<div style="color:#94a3b8;font-size:12px;margin-top:4px;" id="export-status">Carregando html2canvas...</div>' +
+      progDiv.innerHTML = '<div style="color:#e2e8f0;font-size:16px;font-weight:600;">Exportando Video MP4...</div>' +
+        '<div style="color:#94a3b8;font-size:12px;margin-top:4px;" id="export-status">Carregando bibliotecas...</div>' +
         '<div class="export-progress-bar"><div class="export-progress-fill" id="export-pbar" style="width:0%"></div></div>' +
         '<button onclick="cancelVideoExport()" style="margin-top:12px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 14px;border-radius:8px;cursor:pointer;font-size:11px;">Cancelar</button>';
       document.getElementById('replay-map-container').appendChild(progDiv);
@@ -3903,135 +3903,205 @@
         }
       }
 
-      document.getElementById('export-status').textContent = 'Capturando frames...';
+      // Load mp4-muxer for proper MP4 encoding (hosted locally)
+      if (!window.Mp4Muxer) {
+        try {
+          await new Promise(function(resolve, reject) {
+            var s = document.createElement('script');
+            s.src = '/mp4-muxer.min.js';
+            s.onload = resolve; s.onerror = reject;
+            document.head.appendChild(s);
+          });
+        } catch(e) {
+          console.warn('mp4-muxer not available, will fallback to WebM');
+        }
+      }
+
+      document.getElementById('export-status').textContent = 'Capturando frames do mapa...';
 
       var mapContainer = document.getElementById('replay-map');
       var totalPoints = replayData.length;
-      // Limit frames: max 120 frames for good balance of quality and size
-      var maxFrames = 120;
+      var maxFrames = 150;
       var step = Math.max(1, Math.floor(totalPoints / maxFrames));
-      var frames = [];
       var captureW = 640;
       var captureH = 360;
+      var fps = 5;
+      var frameDuration = 1000000 / fps; // microseconds
 
-      for (var i = 0; i < totalPoints && !window._exportCancelled; i += step) {
-        replayIndex = i;
+      // Check if VideoEncoder is available (for MP4)
+      var canMP4 = typeof VideoEncoder !== 'undefined' && window.Mp4Muxer;
+
+      if (canMP4) {
+        // ========== MP4 EXPORT with VideoEncoder + mp4-muxer ==========
+        try {
+          var muxer = new Mp4Muxer.Muxer({
+            target: new Mp4Muxer.ArrayBufferTarget(),
+            video: {
+              codec: 'avc',
+              width: captureW,
+              height: captureH
+            },
+            fastStart: 'in-memory'
+          });
+
+          var encoder = new VideoEncoder({
+            output: function(chunk, meta) { muxer.addVideoChunk(chunk, meta); },
+            error: function(e) { console.error('Encoder error:', e); }
+          });
+
+          encoder.configure({
+            codec: 'avc1.42001f',
+            width: captureW,
+            height: captureH,
+            bitrate: 1500000,
+            framerate: fps
+          });
+
+          var frameCount = 0;
+          for (var i = 0; i < totalPoints && !window._exportCancelled; i += step) {
+            replayIndex = i;
+            updateReplayDisplay();
+            replayMap.setView([replayData[i].lat, replayData[i].lng], replayMap.getZoom(), { animate: false });
+            await new Promise(function(r) { setTimeout(r, 150); });
+
+            try {
+              var capturedCanvas = await html2canvas(mapContainer, {
+                useCORS: true, allowTaint: true, scale: 0.5, logging: false,
+                width: mapContainer.offsetWidth, height: mapContainer.offsetHeight
+              });
+              // Draw info bar
+              var ctx = capturedCanvas.getContext('2d');
+              var cw = capturedCanvas.width, ch = capturedCanvas.height;
+              ctx.fillStyle = 'rgba(15,23,42,0.85)';
+              ctx.fillRect(0, ch - 40, cw, 40);
+              ctx.fillStyle = '#22c55e';
+              ctx.font = 'bold 14px sans-serif';
+              ctx.fillText(Math.round(replayData[i].speed) + ' km/h', 10, ch - 14);
+              ctx.fillStyle = '#e2e8f0';
+              ctx.font = '12px sans-serif';
+              ctx.fillText('  ' + new Date(replayData[i].time).toLocaleString('pt-BR'), 90, ch - 14);
+              ctx.fillStyle = 'rgba(148,163,184,0.6)';
+              ctx.font = '10px sans-serif';
+              ctx.textAlign = 'right';
+              ctx.fillText('HSQ Rastreamento', cw - 8, ch - 14);
+              ctx.textAlign = 'left';
+
+              // Resize
+              var resized = document.createElement('canvas');
+              resized.width = captureW; resized.height = captureH;
+              resized.getContext('2d').drawImage(capturedCanvas, 0, 0, captureW, captureH);
+
+              var frame = new VideoFrame(resized, { timestamp: frameCount * frameDuration });
+              encoder.encode(frame, { keyFrame: frameCount % 30 === 0 });
+              frame.close();
+              frameCount++;
+            } catch(e) { console.warn('Frame error:', e); }
+
+            var pct = Math.round((i / totalPoints) * 100);
+            document.getElementById('export-pbar').style.width = pct + '%';
+            document.getElementById('export-status').textContent = 'Frame ' + frameCount + ' (' + pct + '%)';
+          }
+
+          if (window._exportCancelled) { encoder.close(); progDiv.remove(); return; }
+
+          document.getElementById('export-status').textContent = 'Finalizando MP4...';
+          document.getElementById('export-pbar').style.width = '95%';
+
+          await encoder.flush();
+          muxer.finalize();
+          var buffer = muxer.target.buffer;
+          var blob = new Blob([buffer], { type: 'video/mp4' });
+
+          progDiv.remove();
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          var devName = document.getElementById('replay-device-select');
+          var name = devName.options[devName.selectedIndex].textContent || 'replay';
+          a.href = url;
+          a.download = 'replay_' + name.replace(/[^a-zA-Z0-9]/g,'_') + '.mp4';
+          a.click();
+          setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+          showToast('Video MP4 exportado com sucesso!', 'success');
+          return;
+        } catch(e) {
+          console.error('MP4 export error, falling back to WebM:', e);
+          // Fall through to WebM fallback
+        }
+      }
+
+      // ========== FALLBACK: WebM via MediaRecorder ==========
+      document.getElementById('export-status').textContent = 'Capturando frames (WebM)...';
+      var frames = [];
+
+      for (var i2 = 0; i2 < totalPoints && !window._exportCancelled; i2 += step) {
+        replayIndex = i2;
         updateReplayDisplay();
-        replayMap.setView([replayData[i].lat, replayData[i].lng], replayMap.getZoom(), { animate: false });
-
-        // Wait for map tiles to render
+        replayMap.setView([replayData[i2].lat, replayData[i2].lng], replayMap.getZoom(), { animate: false });
         await new Promise(function(r) { setTimeout(r, 150); });
 
         try {
-          var capturedCanvas = await html2canvas(mapContainer, {
-            useCORS: true,
-            allowTaint: true,
-            scale: 0.5,
-            logging: false,
-            width: mapContainer.offsetWidth,
-            height: mapContainer.offsetHeight
+          var cap = await html2canvas(mapContainer, {
+            useCORS: true, allowTaint: true, scale: 0.5, logging: false,
+            width: mapContainer.offsetWidth, height: mapContainer.offsetHeight
           });
-          // Draw info bar on captured canvas
-          var ctx = capturedCanvas.getContext('2d');
-          var cw = capturedCanvas.width;
-          var ch = capturedCanvas.height;
-          ctx.fillStyle = 'rgba(15,23,42,0.85)';
-          ctx.fillRect(0, ch - 40, cw, 40);
-          ctx.fillStyle = '#e2e8f0';
-          ctx.font = 'bold 13px sans-serif';
-          ctx.fillText(new Date(replayData[i].time).toLocaleString('pt-BR') + '  |  ' + Math.round(replayData[i].speed) + ' km/h', 10, ch - 14);
-          ctx.fillStyle = 'rgba(148,163,184,0.5)';
-          ctx.font = '10px sans-serif';
-          ctx.textAlign = 'right';
-          ctx.fillText('HSQ Rastreamento', cw - 10, ch - 14);
-          ctx.textAlign = 'left';
+          var c2 = cap.getContext('2d');
+          var cw2 = cap.width, ch2 = cap.height;
+          c2.fillStyle = 'rgba(15,23,42,0.85)';
+          c2.fillRect(0, ch2 - 40, cw2, 40);
+          c2.fillStyle = '#22c55e';
+          c2.font = 'bold 14px sans-serif';
+          c2.fillText(Math.round(replayData[i2].speed) + ' km/h', 10, ch2 - 14);
+          c2.fillStyle = '#e2e8f0';
+          c2.font = '12px sans-serif';
+          c2.fillText('  ' + new Date(replayData[i2].time).toLocaleString('pt-BR'), 90, ch2 - 14);
 
-          // Resize to standard dimensions
-          var resized = document.createElement('canvas');
-          resized.width = captureW;
-          resized.height = captureH;
-          resized.getContext('2d').drawImage(capturedCanvas, 0, 0, captureW, captureH);
-          frames.push(resized);
-        } catch(e) {
-          console.warn('Frame capture error:', e);
-        }
+          var rs = document.createElement('canvas');
+          rs.width = captureW; rs.height = captureH;
+          rs.getContext('2d').drawImage(cap, 0, 0, captureW, captureH);
+          frames.push(rs);
+        } catch(e) {}
 
-        var pct = Math.round((i / totalPoints) * 100);
-        document.getElementById('export-pbar').style.width = pct + '%';
-        document.getElementById('export-status').textContent = 'Frame ' + frames.length + '/' + Math.round(totalPoints/step) + ' (' + pct + '%)';
+        var pct2 = Math.round((i2 / totalPoints) * 100);
+        document.getElementById('export-pbar').style.width = pct2 + '%';
+        document.getElementById('export-status').textContent = 'Frame ' + frames.length + ' (' + pct2 + '%)';
       }
 
-      if (window._exportCancelled) { progDiv.remove(); return; }
+      if (window._exportCancelled || frames.length < 2) { progDiv.remove(); return; }
 
-      if (frames.length < 2) {
-        progDiv.remove();
-        showToast('Nao foi possivel capturar frames suficientes', 'error');
-        return;
+      document.getElementById('export-status').textContent = 'Montando video...';
+      var outCanvas = document.createElement('canvas');
+      outCanvas.width = captureW; outCanvas.height = captureH;
+      var outCtx = outCanvas.getContext('2d');
+
+      var stream = outCanvas.captureStream(fps);
+      var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+      var recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 2000000 });
+      var chunks = [];
+      recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
+
+      var videoReady = new Promise(function(resolve) {
+        recorder.onstop = function() { resolve(new Blob(chunks, { type: 'video/webm' })); };
+      });
+
+      recorder.start();
+      for (var f = 0; f < frames.length; f++) {
+        outCtx.drawImage(frames[f], 0, 0);
+        await new Promise(function(r) { setTimeout(r, 200); });
       }
+      await new Promise(function(r) { setTimeout(r, 300); });
+      recorder.stop();
 
-      // Build WebM from canvas frames using manual approach
-      document.getElementById('export-status').textContent = 'Montando video MP4... (pode demorar)';
-      document.getElementById('export-pbar').style.width = '90%';
-
-      try {
-        // Use a canvas + MediaRecorder approach with pre-rendered frames
-        var outCanvas = document.createElement('canvas');
-        outCanvas.width = captureW;
-        outCanvas.height = captureH;
-        var outCtx = outCanvas.getContext('2d');
-
-        var stream = outCanvas.captureStream(10);
-        var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' :
-                       MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
-        if (!mimeType) {
-          progDiv.remove();
-          showToast('Navegador nao suporta gravacao de video', 'error');
-          return;
-        }
-        var recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 2000000 });
-        var chunks = [];
-
-        recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
-
-        var videoReady = new Promise(function(resolve) {
-          recorder.onstop = function() {
-            var blob = new Blob(chunks, { type: 'video/webm' });
-            resolve(blob);
-          };
-        });
-
-        recorder.start();
-
-        // Draw each pre-rendered frame to the canvas
-        for (var f = 0; f < frames.length && !window._exportCancelled; f++) {
-          outCtx.clearRect(0, 0, captureW, captureH);
-          outCtx.drawImage(frames[f], 0, 0);
-          // Hold each frame for 200ms (5fps effective)
-          await new Promise(function(r) { setTimeout(r, 200); });
-        }
-        // Hold last frame a bit longer
-        await new Promise(function(r) { setTimeout(r, 500); });
-        recorder.stop();
-
-        var videoBlob = await videoReady;
-        progDiv.remove();
-
-        if (window._exportCancelled) return;
-
-        var url = URL.createObjectURL(videoBlob);
-        var a = document.createElement('a');
-        var devName = document.getElementById('replay-device-select');
-        var name = devName.options[devName.selectedIndex].textContent || 'replay';
-        a.href = url;
-        a.download = 'replay-' + name.replace(/[^a-zA-Z0-9]/g,'_') + '.webm';
-        a.click();
-        setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
-        showToast('Video exportado com sucesso!', 'success');
-      } catch(e) {
-        console.error('Video export error:', e);
-        progDiv.remove();
-        showToast('Erro ao montar video: ' + e.message, 'error');
-      }
+      var videoBlob = await videoReady;
+      progDiv.remove();
+      var url2 = URL.createObjectURL(videoBlob);
+      var a2 = document.createElement('a');
+      var devName2 = document.getElementById('replay-device-select');
+      var nm = devName2.options[devName2.selectedIndex].textContent || 'replay';
+      a2.href = url2;
+      a2.download = 'replay_' + nm.replace(/[^a-zA-Z0-9]/g,'_') + '.webm';
+      a2.click();
+      setTimeout(function() { URL.revokeObjectURL(url2); }, 10000);
+      showToast('Video exportado (WebM - seu navegador nao suporta MP4 direto)', 'success');
     }
 
     function cancelVideoExport() {
