@@ -948,6 +948,48 @@
       margin-bottom: 24px;
     }
 
+    /* Icon Picker Grid */
+    .icon-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .icon-picker-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 6px;
+      border: 2px solid rgba(51, 65, 85, 0.5);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(15, 23, 42, 0.5);
+    }
+    .icon-picker-item:hover {
+      border-color: #4183ef;
+      background: rgba(65, 131, 239, 0.1);
+    }
+    .icon-picker-item.selected {
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.1);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
+    }
+    .icon-picker-item svg {
+      width: 40px;
+      height: 40px;
+    }
+    .icon-picker-item .icon-label {
+      font-size: 11px;
+      color: #94a3b8;
+      text-align: center;
+    }
+    .icon-picker-item.selected .icon-label {
+      color: #22c55e;
+      font-weight: 600;
+    }
+
     /* Loading spinner */
     .spinner {
       display: inline-block;
@@ -1876,18 +1918,10 @@
           <input type="text" id="device-imei" placeholder="Ex: 353027080123456" required>
         </div>
         <div class="form-group">
-          <label>Categoria</label>
-          <select id="device-category">
-            <option value="">Nenhuma</option>
-            <option value="car">Carro</option>
-            <option value="truck">Caminhao</option>
-            <option value="bus">Onibus</option>
-            <option value="motorcycle">Moto</option>
-            <option value="van">Van</option>
-            <option value="boat">Barco</option>
-            <option value="person">Pessoa</option>
-            <option value="animal">Animal</option>
-          </select>
+          <label>Icone do Veiculo</label>
+          <input type="hidden" id="device-category" value="">
+          <div class="icon-picker-grid" id="device-icon-picker">
+          </div>
         </div>
         <div class="form-group">
           <label>Vincular a Cliente (opcional)</label>
@@ -1922,6 +1956,24 @@
           <button type="submit" class="btn-primary" id="btn-assign-device">Vincular</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ======== EDIT DEVICE ICON MODAL ======== -->
+  <div id="modal-edit-device" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-title">Alterar Icone do Veiculo</div>
+      <div id="edit-device-name-display" style="color:#94a3b8;margin-bottom:16px;font-size:14px;"></div>
+      <input type="hidden" id="edit-device-id">
+      <div class="form-group">
+        <label>Escolha o icone</label>
+        <div class="icon-picker-grid" id="edit-device-icon-picker">
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:24px;">
+        <button type="button" class="btn-secondary" style="margin-top:0" onclick="closeModal('modal-edit-device')">Cancelar</button>
+        <button type="button" class="btn-primary" id="btn-save-device-icon" onclick="handleSaveDeviceIcon()">Salvar Icone</button>
+      </div>
     </div>
   </div>
 
@@ -2977,6 +3029,47 @@
       showPage('page-login');
     }
 
+    // ==================== VEHICLE ICON LIBRARY ====================
+    // Realistic inline SVG icons for each vehicle category
+    var vehicleIconSVGs = {
+      car: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="12" y="22" width="40" height="20" rx="6" fill="#3b82f6"/><rect x="8" y="32" width="48" height="14" rx="4" fill="#2563eb"/><rect x="16" y="24" width="12" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><rect x="32" y="24" width="14" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><circle cx="18" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="18" cy="48" r="2.5" fill="#475569"/><circle cx="46" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="46" cy="48" r="2.5" fill="#475569"/><rect x="6" y="38" width="8" height="3" rx="1.5" fill="#fbbf24"/><rect x="50" y="38" width="8" height="3" rx="1.5" fill="#fbbf24"/><rect x="48" y="32" width="10" height="2" rx="1" fill="#ef4444"/></svg>',
+      truck: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="18" width="36" height="26" rx="3" fill="#64748b"/><rect x="6" y="20" width="32" height="12" rx="2" fill="#475569"/><rect x="40" y="24" width="20" height="20" rx="4" fill="#3b82f6"/><rect x="44" y="26" width="12" height="8" rx="2" fill="#93c5fd" opacity="0.7"/><circle cx="16" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="16" cy="48" r="2.5" fill="#475569"/><circle cx="30" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="30" cy="48" r="2.5" fill="#475569"/><circle cx="50" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="50" cy="48" r="2.5" fill="#475569"/><rect x="56" y="30" width="6" height="2" rx="1" fill="#fbbf24"/><rect x="56" y="38" width="6" height="2" rx="1" fill="#ef4444"/></svg>',
+      motorcycle: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="14" cy="44" r="8" fill="none" stroke="#64748b" stroke-width="3"/><circle cx="14" cy="44" r="3" fill="#475569"/><circle cx="50" cy="44" r="8" fill="none" stroke="#64748b" stroke-width="3"/><circle cx="50" cy="44" r="3" fill="#475569"/><path d="M14 44 L24 30 L40 28 L50 44" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linejoin="round"/><path d="M24 30 L30 22 L38 22 L40 28" fill="#2563eb"/><rect x="28" y="20" width="8" height="5" rx="2" fill="#93c5fd" opacity="0.7"/><circle cx="30" cy="22" r="3" fill="#1e293b"/><rect x="8" y="36" width="4" height="2" rx="1" fill="#fbbf24"/><rect x="52" y="36" width="4" height="2" rx="1" fill="#ef4444"/></svg>',
+      bus: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="12" width="52" height="36" rx="6" fill="#f59e0b"/><rect x="10" y="16" width="10" height="12" rx="2" fill="#93c5fd" opacity="0.8"/><rect x="22" y="16" width="10" height="12" rx="2" fill="#93c5fd" opacity="0.8"/><rect x="34" y="16" width="10" height="12" rx="2" fill="#93c5fd" opacity="0.8"/><rect x="46" y="16" width="10" height="12" rx="2" fill="#93c5fd" opacity="0.8"/><rect x="6" y="32" width="52" height="4" fill="#d97706"/><circle cx="16" cy="52" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="16" cy="52" r="2.5" fill="#475569"/><circle cx="48" cy="52" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="48" cy="52" r="2.5" fill="#475569"/><rect x="2" y="22" width="4" height="2" rx="1" fill="#fbbf24"/><rect x="58" y="22" width="4" height="2" rx="1" fill="#ef4444"/></svg>',
+      van: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="18" width="52" height="26" rx="5" fill="#8b5cf6"/><path d="M44 18 L58 18 Q58 18 58 18 L58 30 L44 18Z" fill="#7c3aed"/><rect x="10" y="22" width="12" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><rect x="24" y="22" width="12" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><rect x="44" y="22" width="12" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><circle cx="16" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="16" cy="48" r="2.5" fill="#475569"/><circle cx="48" cy="48" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="48" cy="48" r="2.5" fill="#475569"/><rect x="2" y="28" width="4" height="3" rx="1.5" fill="#fbbf24"/><rect x="58" y="28" width="4" height="3" rx="1.5" fill="#ef4444"/></svg>',
+      pickup: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="24" width="28" height="14" rx="2" fill="#475569"/><rect x="32" y="18" width="24" height="20" rx="4" fill="#059669"/><rect x="36" y="20" width="16" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><rect x="4" y="32" width="56" height="10" rx="3" fill="#047857"/><circle cx="16" cy="46" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="16" cy="46" r="2.5" fill="#475569"/><circle cx="48" cy="46" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/><circle cx="48" cy="46" r="2.5" fill="#475569"/><rect x="56" y="28" width="6" height="2" rx="1" fill="#fbbf24"/><rect x="56" y="34" width="6" height="2" rx="1" fill="#ef4444"/></svg>',
+      tractor: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><rect x="18" y="16" width="30" height="22" rx="4" fill="#16a34a"/><rect x="22" y="18" width="14" height="10" rx="2" fill="#93c5fd" opacity="0.7"/><rect x="14" y="30" width="38" height="10" rx="3" fill="#15803d"/><circle cx="16" cy="46" r="8" fill="#1e293b" stroke="#64748b" stroke-width="2"/><circle cx="16" cy="46" r="4" fill="#475569"/><circle cx="48" cy="44" r="6" fill="#1e293b" stroke="#64748b" stroke-width="2"/><circle cx="48" cy="44" r="3" fill="#475569"/><rect x="6" y="14" width="4" height="18" rx="2" fill="#64748b"/></svg>',
+      boat: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path d="M8 40 Q32 52 56 40 L52 48 Q32 56 12 48 Z" fill="#0ea5e9"/><rect x="22" y="20" width="20" height="22" rx="3" fill="#f8fafc"/><rect x="24" y="22" width="16" height="8" rx="2" fill="#93c5fd" opacity="0.7"/><rect x="30" y="8" width="4" height="14" fill="#64748b"/><path d="M34 8 L46 18 L34 18 Z" fill="#ef4444" opacity="0.8"/></svg>',
+      person: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="16" r="8" fill="#f59e0b"/><rect x="24" y="26" width="16" height="20" rx="4" fill="#3b82f6"/><rect x="20" y="28" width="6" height="14" rx="3" fill="#2563eb"/><rect x="38" y="28" width="6" height="14" rx="3" fill="#2563eb"/><rect x="26" y="46" width="5" height="12" rx="2.5" fill="#1e293b"/><rect x="33" y="46" width="5" height="12" rx="2.5" fill="#1e293b"/></svg>',
+      animal: '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><ellipse cx="32" cy="34" rx="18" ry="12" fill="#92400e"/><circle cx="48" cy="28" r="8" fill="#a16207"/><circle cx="46" cy="26" r="2" fill="#1e293b"/><ellipse cx="50" cy="30" rx="3" ry="2" fill="#fbbf24"/><rect x="20" y="44" width="4" height="10" rx="2" fill="#78350f"/><rect x="28" y="44" width="4" height="10" rx="2" fill="#78350f"/><rect x="36" y="44" width="4" height="10" rx="2" fill="#78350f"/><rect x="44" y="44" width="4" height="10" rx="2" fill="#78350f"/><path d="M14 34 Q10 30 14 28" stroke="#92400e" stroke-width="3" fill="none"/></svg>'
+    };
+
+    var vehicleCategoryLabels = {
+      car: 'Carro', truck: 'Caminhao', motorcycle: 'Moto', bus: 'Onibus',
+      van: 'Van', pickup: 'Pickup', tractor: 'Trator', boat: 'Barco',
+      person: 'Pessoa', animal: 'Animal'
+    };
+
+    function renderIconPicker(containerId, selectedCategory) {
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      Object.keys(vehicleIconSVGs).forEach(function(cat) {
+        var item = document.createElement('div');
+        item.className = 'icon-picker-item' + (cat === selectedCategory ? ' selected' : '');
+        item.setAttribute('data-category', cat);
+        item.innerHTML = vehicleIconSVGs[cat] + '<span class="icon-label">' + (vehicleCategoryLabels[cat] || cat) + '</span>';
+        item.onclick = function() {
+          container.querySelectorAll('.icon-picker-item').forEach(function(el) { el.classList.remove('selected'); });
+          item.classList.add('selected');
+          // Update hidden input
+          var hiddenInput = container.parentElement.querySelector('input[type=hidden]');
+          if (hiddenInput) hiddenInput.value = cat;
+        };
+        container.appendChild(item);
+      });
+    }
+
     // ==================== DEVICES ====================
     let allDevices = [];
 
@@ -3013,9 +3106,15 @@
           if (d.position.speed > 0) posInfo += ' (' + Math.round(d.position.speed) + ' km/h)';
         }
         var lastUpdate = d.lastUpdate ? new Date(d.lastUpdate).toLocaleString('pt-BR') : '-';
-        var categoryLabels = {car:'Carro',truck:'Caminhao',bus:'Onibus',motorcycle:'Moto',van:'Van',boat:'Barco',person:'Pessoa',animal:'Animal'};
+        // Icon preview for the table
+        var iconPreview = '';
+        if (d.category && vehicleIconSVGs[d.category]) {
+          iconPreview = '<div style="width:32px;height:32px;display:inline-block;vertical-align:middle;">' + vehicleIconSVGs[d.category] + '</div> ';
+        }
+        var catLabel = vehicleCategoryLabels[d.category] || d.category || '-';
 
         var actions = '';
+        actions += '<button class="action-btn btn-edit" onclick="showEditDeviceIconModal(' + d.id + ', \'' + (d.name||'').replace(/'/g,"\\'") + '\', \'' + (d.category||'') + '\')" style="font-size:11px;">Icone</button> ';
         if (d.client) {
           actions += '<button class="action-btn btn-toggle-off" onclick="handleUnassignDevice(' + d.id + ', \'' + d.client.clientId + '\')">Desvincular</button>';
         } else {
@@ -3026,7 +3125,7 @@
         return '<tr>' +
           '<td style="font-weight:600;color:#f1f5f9;">' + d.name + '</td>' +
           '<td><code style="background:rgba(65,131,239,0.15);padding:2px 8px;border-radius:4px;color:#93c5fd;font-size:12px;">' + d.uniqueId + '</code></td>' +
-          '<td>' + (categoryLabels[d.category] || d.category || '-') + '</td>' +
+          '<td style="white-space:nowrap;">' + iconPreview + '<span style="vertical-align:middle;">' + catLabel + '</span></td>' +
           '<td><span style="color:' + statusColor + ';font-weight:600;">' + statusText + '</span><br><span style="font-size:11px;color:#64748b;">' + lastUpdate + '</span></td>' +
           '<td>' + clientInfo + '</td>' +
           '<td style="font-size:12px;">' + posInfo + '</td>' +
@@ -3063,6 +3162,7 @@
       document.getElementById('device-name').value = '';
       document.getElementById('device-imei').value = '';
       document.getElementById('device-category').value = '';
+      renderIconPicker('device-icon-picker', '');
       loadClientsForSelect('device-client-select');
     }
 
@@ -3097,6 +3197,38 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Criar Dispositivo';
+      }
+    }
+
+    function showEditDeviceIconModal(deviceId, deviceName, currentCategory) {
+      document.getElementById('modal-edit-device').classList.add('show');
+      document.getElementById('edit-device-id').value = deviceId;
+      document.getElementById('edit-device-name-display').textContent = 'Dispositivo: ' + deviceName;
+      renderIconPicker('edit-device-icon-picker', currentCategory || '');
+    }
+
+    async function handleSaveDeviceIcon() {
+      var deviceId = document.getElementById('edit-device-id').value;
+      var selected = document.querySelector('#edit-device-icon-picker .icon-picker-item.selected');
+      var category = selected ? selected.getAttribute('data-category') : '';
+      var btn = document.getElementById('btn-save-device-icon');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Salvando...';
+      try {
+        var resp = await fetch(API_URL + '/admin/devices/' + deviceId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+          body: JSON.stringify({ category: category }),
+        });
+        if (!resp.ok) throw new Error('Erro ao salvar');
+        showToast('Icone atualizado com sucesso!', 'success');
+        closeModal('modal-edit-device');
+        loadDevices();
+      } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salvar Icone';
       }
     }
 
@@ -3839,58 +3971,86 @@
       }
     }
 
+    // Map vehicle icon SVG paths (top-down view, facing NORTH/UP, centered on 18,18 in 36x36 viewBox)
+    var mapVehiclePaths = {
+      truck:
+        '<rect x="13" y="8" width="10" height="12" rx="1" fill="white" opacity="0.9"/>' +
+        '<rect x="14.5" y="9" width="7" height="3.5" rx="0.8" fill="FG" opacity="0.5"/>' +
+        '<rect x="12" y="20" width="12" height="7" rx="1" fill="white" opacity="0.9"/>' +
+        '<line x1="12" y1="23" x2="24" y2="23" stroke="FG" stroke-width="0.4" opacity="0.4"/>' +
+        '<circle cx="14.5" cy="28.5" r="1.8" fill="white"/><circle cx="14.5" cy="28.5" r="0.8" fill="FG"/>' +
+        '<circle cx="21.5" cy="28.5" r="1.8" fill="white"/><circle cx="21.5" cy="28.5" r="0.8" fill="FG"/>',
+      car:
+        '<rect x="13.5" y="10" width="9" height="17" rx="3.5" fill="white" opacity="0.9"/>' +
+        '<rect x="14.5" y="11.5" width="7" height="4" rx="1.5" fill="FG" opacity="0.4"/>' +
+        '<rect x="14.5" y="21" width="7" height="3" rx="1" fill="FG" opacity="0.3"/>' +
+        '<circle cx="15.5" cy="27.5" r="1.5" fill="white"/><circle cx="15.5" cy="27.5" r="0.6" fill="FG"/>' +
+        '<circle cx="20.5" cy="27.5" r="1.5" fill="white"/><circle cx="20.5" cy="27.5" r="0.6" fill="FG"/>',
+      motorcycle:
+        '<ellipse cx="18" cy="10" rx="3" ry="2.5" fill="white" opacity="0.9"/>' +
+        '<rect x="16.5" y="12" width="3" height="8" rx="1.5" fill="white" opacity="0.9"/>' +
+        '<rect x="16" y="14" width="4" height="3" rx="1" fill="FG" opacity="0.3"/>' +
+        '<circle cx="18" cy="8" r="1.5" fill="FG" opacity="0.5"/>' +
+        '<circle cx="18" cy="24" r="3" fill="none" stroke="white" stroke-width="1.5"/>' +
+        '<circle cx="18" cy="24" r="1.2" fill="white"/>',
+      bus:
+        '<rect x="12" y="7" width="12" height="22" rx="2.5" fill="white" opacity="0.9"/>' +
+        '<rect x="13.5" y="8.5" width="9" height="3.5" rx="1" fill="FG" opacity="0.4"/>' +
+        '<rect x="13.5" y="13" width="9" height="2" rx="0.5" fill="FG" opacity="0.2"/>' +
+        '<rect x="13.5" y="16" width="9" height="2" rx="0.5" fill="FG" opacity="0.2"/>' +
+        '<rect x="13.5" y="19" width="9" height="2" rx="0.5" fill="FG" opacity="0.2"/>' +
+        '<circle cx="14.5" cy="30.5" r="1.5" fill="white"/><circle cx="14.5" cy="30.5" r="0.6" fill="FG"/>' +
+        '<circle cx="21.5" cy="30.5" r="1.5" fill="white"/><circle cx="21.5" cy="30.5" r="0.6" fill="FG"/>',
+      van:
+        '<rect x="12.5" y="9" width="11" height="19" rx="2.5" fill="white" opacity="0.9"/>' +
+        '<rect x="14" y="10" width="8" height="5" rx="1.5" fill="FG" opacity="0.4"/>' +
+        '<line x1="13.5" y1="18" x2="22.5" y2="18" stroke="FG" stroke-width="0.5" opacity="0.3"/>' +
+        '<circle cx="15" cy="29" r="1.5" fill="white"/><circle cx="15" cy="29" r="0.6" fill="FG"/>' +
+        '<circle cx="21" cy="29" r="1.5" fill="white"/><circle cx="21" cy="29" r="0.6" fill="FG"/>',
+      pickup:
+        '<rect x="13" y="15" width="10" height="13" rx="2.5" fill="white" opacity="0.9"/>' +
+        '<rect x="14" y="16" width="8" height="4" rx="1.5" fill="FG" opacity="0.4"/>' +
+        '<rect x="13.5" y="7" width="9" height="8" rx="1" fill="white" opacity="0.7"/>' +
+        '<circle cx="15.5" cy="29" r="1.5" fill="white"/><circle cx="15.5" cy="29" r="0.6" fill="FG"/>' +
+        '<circle cx="20.5" cy="29" r="1.5" fill="white"/><circle cx="20.5" cy="29" r="0.6" fill="FG"/>',
+      tractor:
+        '<rect x="14" y="12" width="8" height="12" rx="2" fill="white" opacity="0.9"/>' +
+        '<rect x="15" y="13" width="6" height="4" rx="1" fill="FG" opacity="0.4"/>' +
+        '<circle cx="15" cy="28" r="3.5" fill="none" stroke="white" stroke-width="1.8"/>' +
+        '<circle cx="15" cy="28" r="1.5" fill="white"/>' +
+        '<circle cx="21" cy="26" r="2.5" fill="none" stroke="white" stroke-width="1.5"/>' +
+        '<circle cx="21" cy="26" r="1" fill="white"/>',
+      boat:
+        '<path d="M10 22 Q18 8 26 22 Z" fill="white" opacity="0.9"/>' +
+        '<path d="M12 22 Q18 12 24 22 Z" fill="FG" opacity="0.3"/>' +
+        '<rect x="17" y="14" width="2" height="10" fill="white"/>' +
+        '<path d="M19 14 L26 20 L19 20 Z" fill="white" opacity="0.7"/>',
+      person:
+        '<circle cx="18" cy="11" r="3.5" fill="white" opacity="0.9"/>' +
+        '<rect x="14.5" y="15" width="7" height="9" rx="2.5" fill="white" opacity="0.9"/>' +
+        '<rect x="15.5" y="24" width="2.5" height="5" rx="1.2" fill="white" opacity="0.8"/>' +
+        '<rect x="18" y="24" width="2.5" height="5" rx="1.2" fill="white" opacity="0.8"/>',
+      animal:
+        '<ellipse cx="18" cy="18" rx="7" ry="5" fill="white" opacity="0.9"/>' +
+        '<circle cx="24" cy="14" r="3.5" fill="white" opacity="0.9"/>' +
+        '<circle cx="23.5" cy="13" r="1" fill="FG" opacity="0.5"/>' +
+        '<rect x="12" y="22" width="2" height="5" rx="1" fill="white" opacity="0.8"/>' +
+        '<rect x="16" y="22" width="2" height="5" rx="1" fill="white" opacity="0.8"/>' +
+        '<rect x="20" y="22" width="2" height="5" rx="1" fill="white" opacity="0.8"/>' +
+        '<rect x="24" y="22" width="2" height="5" rx="1" fill="white" opacity="0.8"/>'
+    };
+
     function getVehicleIcon(category, speed, course) {
       var moving = speed > 2;
       var color = moving ? '#22c55e' : '#ef4444';
       var borderColor = moving ? '#16a34a' : '#dc2626';
       var rotation = course || 0;
-      var size = 42;
+      var size = 44;
 
-      // Vehicle-type specific SVG paths (facing UP/North by default)
-      var vehiclePath = '';
       var cat = (category || 'car').toLowerCase();
-
-      if (cat === 'truck' || cat === 'lorry') {
-        // Truck icon - cabin + cargo box
-        vehiclePath =
-          '<rect x="13" y="10" width="10" height="16" rx="1.5" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<rect x="14" y="11" width="8" height="4" rx="1" fill="' + borderColor + '" opacity="0.3"/>' +
-          '<rect x="12" y="24" width="12" height="5" rx="1" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<circle cx="15" cy="30" r="1.5" fill="' + borderColor + '"/>' +
-          '<circle cx="21" cy="30" r="1.5" fill="' + borderColor + '"/>';
-      } else if (cat === 'motorcycle' || cat === 'moto') {
-        // Motorcycle icon - simple bike shape
-        vehiclePath =
-          '<ellipse cx="18" cy="12" rx="2.5" ry="2" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<rect x="16.5" y="14" width="3" height="10" rx="1.5" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<circle cx="18" cy="10" r="1.8" fill="' + borderColor + '"/>' +
-          '<circle cx="18" cy="27" r="2.5" fill="none" stroke="white" stroke-width="1.5"/>' +
-          '<circle cx="18" cy="27" r="1" fill="white"/>';
-      } else if (cat === 'bus' || cat === 'onibus') {
-        // Bus icon - long rectangular body
-        vehiclePath =
-          '<rect x="12" y="9" width="12" height="20" rx="2.5" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<rect x="13.5" y="10.5" width="9" height="4" rx="1" fill="' + borderColor + '" opacity="0.3"/>' +
-          '<rect x="13.5" y="16" width="9" height="2.5" rx="0.5" fill="' + borderColor + '" opacity="0.15"/>' +
-          '<rect x="13.5" y="20" width="9" height="2.5" rx="0.5" fill="' + borderColor + '" opacity="0.15"/>' +
-          '<circle cx="15" cy="30" r="1.5" fill="' + borderColor + '"/>' +
-          '<circle cx="21" cy="30" r="1.5" fill="' + borderColor + '"/>';
-      } else if (cat === 'van' || cat === 'furgao') {
-        // Van icon - taller box shape
-        vehiclePath =
-          '<rect x="12.5" y="10" width="11" height="18" rx="2" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<rect x="14" y="11" width="8" height="5" rx="1.5" fill="' + borderColor + '" opacity="0.3"/>' +
-          '<line x1="14" y1="20" x2="22" y2="20" stroke="' + borderColor + '" stroke-width="0.5" opacity="0.3"/>' +
-          '<circle cx="15" cy="29" r="1.5" fill="' + borderColor + '"/>' +
-          '<circle cx="21" cy="29" r="1.5" fill="' + borderColor + '"/>';
-      } else {
-        // Car icon (default) - sedan shape
-        vehiclePath =
-          '<rect x="13" y="12" width="10" height="15" rx="3" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-          '<rect x="14" y="13" width="8" height="4" rx="1.5" fill="' + borderColor + '" opacity="0.3"/>' +
-          '<circle cx="15.5" cy="28" r="1.5" fill="' + borderColor + '"/>' +
-          '<circle cx="20.5" cy="28" r="1.5" fill="' + borderColor + '"/>';
-      }
+      var vehiclePath = mapVehiclePaths[cat] || mapVehiclePaths['car'];
+      // Replace FG placeholder with the border color
+      vehiclePath = vehiclePath.replace(/FG/g, borderColor);
 
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 36 36">' +
         '<circle cx="18" cy="18" r="16.5" fill="' + color + '" stroke="white" stroke-width="2"/>' +
