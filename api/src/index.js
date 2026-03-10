@@ -4,7 +4,6 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
-const http = require('http');
 const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
@@ -45,6 +44,43 @@ const limiter = rateLimit({
 });
 app.use('/api/auth', limiter);
 
+// SSE endpoint MUST be defined before tracking routes (to avoid auth middleware)
+// Actual handler is set up after bridge variables are initialized (see below)
+const JWT_SECRET = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
+const sseClients = new Set();
+
+app.get('/api/tracking/stream', (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Token required' });
+  try {
+    jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Real-time tracking active' })}\n\n`);
+
+  const keepalive = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch(e) { clearInterval(keepalive); }
+  }, 15000);
+
+  sseClients.add(res);
+  console.log('[SSE] Client connected. Total:', sseClients.size);
+
+  req.on('close', () => {
+    clearInterval(keepalive);
+    sseClients.delete(res);
+    console.log('[SSE] Client disconnected. Total:', sseClients.size);
+  });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/clients', clientRoutes);
@@ -68,12 +104,10 @@ app.get('/api/health', async (req, res) => {
 const TRACCAR_URL = process.env.TRACCAR_URL || 'http://72.61.129.78:8082';
 const TRACCAR_ADMIN_EMAIL = process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com';
 const TRACCAR_ADMIN_PASSWORD = process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!';
-const JWT_SECRET = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
 
 let traccarSession = null;
 let traccarWs = null;
 let traccarReconnectTimer = null;
-const sseClients = new Set(); // Connected SSE clients (browser)
 
 async function getTraccarSession() {
   try {
@@ -169,44 +203,6 @@ function connectTraccarWebSocket() {
     console.error('[Bridge] Traccar WS error:', err.message);
   });
 }
-
-// ====== SSE ENDPOINT ======
-// Browser connects here for real-time position updates
-app.get('/api/tracking/stream', (req, res) => {
-  // Authenticate
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Token required' });
-  try {
-    jwt.verify(token, JWT_SECRET);
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-
-  // Setup SSE
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no', // Disable nginx buffering
-  });
-
-  // Send initial connected event
-  res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Real-time tracking active' })}\n\n`);
-
-  // Send keepalive every 15s to prevent proxy timeouts
-  const keepalive = setInterval(() => {
-    try { res.write(': keepalive\n\n'); } catch(e) { clearInterval(keepalive); }
-  }, 15000);
-
-  sseClients.add(res);
-  console.log('[SSE] Client connected. Total:', sseClients.size);
-
-  req.on('close', () => {
-    clearInterval(keepalive);
-    sseClients.delete(res);
-    console.log('[SSE] Client disconnected. Total:', sseClients.size);
-  });
-});
 
 const PORT = process.env.PORT || 4080;
 app.listen(PORT, '0.0.0.0', async () => {
