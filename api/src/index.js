@@ -62,8 +62,9 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ====== TRACCAR WEBSOCKET BRIDGE ======
-// Connects to Traccar's native WebSocket and broadcasts position updates to HSQ clients
+// ====== TRACCAR REAL-TIME BRIDGE ======
+// Server-side: WebSocket to Traccar's native API
+// Client-side: SSE (Server-Sent Events) — works through any HTTP proxy
 const TRACCAR_URL = process.env.TRACCAR_URL || 'http://72.61.129.78:8082';
 const TRACCAR_ADMIN_EMAIL = process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com';
 const TRACCAR_ADMIN_PASSWORD = process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!';
@@ -72,7 +73,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
 let traccarSession = null;
 let traccarWs = null;
 let traccarReconnectTimer = null;
-const hsqClients = new Set(); // Connected HSQ frontend clients
+const sseClients = new Set(); // Connected SSE clients (browser)
 
 async function getTraccarSession() {
   try {
@@ -86,25 +87,27 @@ async function getTraccarSession() {
     if (cookies) {
       traccarSession = cookies.map(c => c.split(';')[0]).join('; ');
     }
-    console.log('[WS-Bridge] Traccar session obtained');
+    console.log('[Bridge] Traccar session obtained');
     return traccarSession;
   } catch (err) {
-    console.error('[WS-Bridge] Failed to get Traccar session:', err.message);
+    console.error('[Bridge] Failed to get Traccar session:', err.message);
     return null;
   }
 }
 
+function broadcastToSSEClients(eventType, data) {
+  const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(client => {
+    try { client.write(payload); } catch(e) { sseClients.delete(client); }
+  });
+}
+
 function connectTraccarWebSocket() {
-  if (traccarWs) {
-    try { traccarWs.close(); } catch(e) {}
-  }
-  if (traccarReconnectTimer) {
-    clearTimeout(traccarReconnectTimer);
-    traccarReconnectTimer = null;
-  }
+  if (traccarWs) { try { traccarWs.close(); } catch(e) {} }
+  if (traccarReconnectTimer) { clearTimeout(traccarReconnectTimer); traccarReconnectTimer = null; }
 
   if (!traccarSession) {
-    console.log('[WS-Bridge] No session, will retry in 5s...');
+    console.log('[Bridge] No session, will retry in 5s...');
     traccarReconnectTimer = setTimeout(async () => {
       await getTraccarSession();
       connectTraccarWebSocket();
@@ -113,29 +116,24 @@ function connectTraccarWebSocket() {
   }
 
   const wsUrl = TRACCAR_URL.replace('http', 'ws') + '/api/socket';
-  console.log('[WS-Bridge] Connecting to Traccar WebSocket:', wsUrl);
+  console.log('[Bridge] Connecting to Traccar WS:', wsUrl);
 
-  traccarWs = new WebSocket(wsUrl, {
-    headers: { Cookie: traccarSession },
-  });
+  traccarWs = new WebSocket(wsUrl, { headers: { Cookie: traccarSession } });
 
   traccarWs.on('open', () => {
-    console.log('[WS-Bridge] Connected to Traccar WebSocket! Broadcasting to', hsqClients.size, 'clients');
+    console.log('[Bridge] Connected to Traccar! SSE clients:', sseClients.size);
   });
 
   traccarWs.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString());
-      // Traccar sends: { devices: [...], positions: [...] }
-      // Forward position updates to all connected HSQ clients
       if (msg.positions && msg.positions.length > 0) {
-        const broadcast = JSON.stringify({
-          type: 'positions',
+        broadcastToSSEClients('positions', {
           positions: msg.positions.map(p => ({
             deviceId: p.deviceId,
             latitude: p.latitude,
             longitude: p.longitude,
-            speed: p.speed ? Math.round(p.speed * 1.852) : 0, // knots to km/h
+            speed: p.speed ? Math.round(p.speed * 1.852) : 0,
             course: p.course || 0,
             altitude: p.altitude || 0,
             fixTime: p.fixTime,
@@ -143,16 +141,9 @@ function connectTraccarWebSocket() {
             attributes: p.attributes || {},
           })),
         });
-        hsqClients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(broadcast);
-          }
-        });
       }
-      // Also forward device status updates
       if (msg.devices && msg.devices.length > 0) {
-        const broadcast = JSON.stringify({
-          type: 'devices',
+        broadcastToSSEClients('devices', {
           devices: msg.devices.map(d => ({
             deviceId: d.id,
             name: d.name,
@@ -161,21 +152,13 @@ function connectTraccarWebSocket() {
             category: d.category || 'car',
           })),
         });
-        hsqClients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(broadcast);
-          }
-        });
       }
-    } catch (err) {
-      // Not JSON or parse error, ignore
-    }
+    } catch (err) { /* ignore parse errors */ }
   });
 
   traccarWs.on('close', (code, reason) => {
-    console.log('[WS-Bridge] Traccar WebSocket closed:', code, reason?.toString());
+    console.log('[Bridge] Traccar WS closed:', code, reason?.toString());
     traccarWs = null;
-    // Reconnect after 3s
     traccarReconnectTimer = setTimeout(async () => {
       await getTraccarSession();
       connectTraccarWebSocket();
@@ -183,52 +166,52 @@ function connectTraccarWebSocket() {
   });
 
   traccarWs.on('error', (err) => {
-    console.error('[WS-Bridge] Traccar WebSocket error:', err.message);
+    console.error('[Bridge] Traccar WS error:', err.message);
   });
 }
 
-// Create HTTP server + WebSocket server
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws/tracking' });
-
-wss.on('connection', (ws, req) => {
-  // Authenticate via token in query string
+// ====== SSE ENDPOINT ======
+// Browser connects here for real-time position updates
+app.get('/api/tracking/stream', (req, res) => {
+  // Authenticate
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Token required' });
   try {
-    const url = new URL(req.url, 'http://localhost');
-    const token = url.searchParams.get('token');
-    if (!token) {
-      ws.close(4001, 'Token required');
-      return;
-    }
-    const decoded = jwt.verify(token, JWT_SECRET);
-    ws.userId = decoded.id;
-    ws.userRole = decoded.role;
-    ws.traccarUserId = decoded.traccarUserId;
+    jwt.verify(token, JWT_SECRET);
   } catch (err) {
-    ws.close(4002, 'Invalid token');
-    return;
+    return res.status(401).json({ error: 'Invalid token' });
   }
 
-  hsqClients.add(ws);
-  console.log('[WS-Bridge] HSQ client connected. Total:', hsqClients.size);
-
-  // Send a welcome message
-  ws.send(JSON.stringify({ type: 'connected', message: 'Real-time tracking active' }));
-
-  ws.on('close', () => {
-    hsqClients.delete(ws);
-    console.log('[WS-Bridge] HSQ client disconnected. Total:', hsqClients.size);
+  // Setup SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no', // Disable nginx buffering
   });
 
-  ws.on('error', () => {
-    hsqClients.delete(ws);
+  // Send initial connected event
+  res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Real-time tracking active' })}\n\n`);
+
+  // Send keepalive every 15s to prevent proxy timeouts
+  const keepalive = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch(e) { clearInterval(keepalive); }
+  }, 15000);
+
+  sseClients.add(res);
+  console.log('[SSE] Client connected. Total:', sseClients.size);
+
+  req.on('close', () => {
+    clearInterval(keepalive);
+    sseClients.delete(res);
+    console.log('[SSE] Client disconnected. Total:', sseClients.size);
   });
 });
 
 const PORT = process.env.PORT || 4080;
-server.listen(PORT, '0.0.0.0', async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`HSQ Portal API running on port ${PORT}`);
-  console.log(`WebSocket endpoint: ws://0.0.0.0:${PORT}/ws/tracking`);
+  console.log(`SSE endpoint: /api/tracking/stream`);
   // Run seed
   try {
     const seed = require('./seed');
@@ -236,7 +219,7 @@ server.listen(PORT, '0.0.0.0', async () => {
   } catch (err) {
     console.error('Seed failed:', err.message);
   }
-  // Start Traccar WebSocket bridge
+  // Start Traccar bridge
   await getTraccarSession();
   connectTraccarWebSocket();
 });

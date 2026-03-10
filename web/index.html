@@ -3234,39 +3234,35 @@
       return true; // animation started
     }
 
-    // ====== WEBSOCKET REAL-TIME CONNECTION ======
-    var trackingWs = null;
-    var wsReconnectTimer = null;
-    var wsConnected = false;
+    // ====== SSE REAL-TIME CONNECTION ======
+    // Uses Server-Sent Events (works through any HTTP proxy, no WebSocket upgrade needed)
+    var trackingSSE = null;
+    var sseReconnectTimer = null;
+    var sseConnected = false;
 
-    function connectTrackingWebSocket() {
-      if (trackingWs) { try { trackingWs.close(); } catch(e) {} }
-      if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    function connectTrackingSSE() {
+      if (trackingSSE) { try { trackingSSE.close(); } catch(e) {} }
+      if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
 
       var token = localStorage.getItem('hsq_token');
       if (!token) return;
 
-      var wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      var wsUrl = wsProtocol + '//' + location.host + '/ws/tracking?token=' + token;
-      console.log('[HSQ-WS] Connecting:', wsUrl);
+      var sseUrl = '/api/tracking/stream?token=' + encodeURIComponent(token);
+      console.log('[HSQ-SSE] Connecting to real-time stream...');
 
-      trackingWs = new WebSocket(wsUrl);
+      trackingSSE = new EventSource(sseUrl);
 
-      trackingWs.onopen = function() {
-        wsConnected = true;
-        console.log('[HSQ-WS] Connected! Real-time tracking active.');
-        // Stop polling fallback if running
+      trackingSSE.addEventListener('connected', function(event) {
+        sseConnected = true;
+        console.log('[HSQ-SSE] Connected! Real-time tracking active.');
         if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
-      };
+      });
 
-      trackingWs.onmessage = function(event) {
+      trackingSSE.addEventListener('positions', function(event) {
         try {
           var msg = JSON.parse(event.data);
-
-          if (msg.type === 'positions' && msg.positions) {
-            // Real-time position update from Traccar
+          if (msg.positions) {
             msg.positions.forEach(function(pos) {
-              // Find vehicle in allVehicleData and update
               var v = allVehicleData.find(function(x) { return x.deviceId === pos.deviceId; });
               if (v && v.position) {
                 v.position.latitude = pos.latitude;
@@ -3278,13 +3274,11 @@
                 v.position.accuracy = pos.accuracy;
                 v.position.attributes = pos.attributes;
 
-                // Animate marker smoothly on map
                 if (mapReady && trackingMap && vehicleMarkers[pos.deviceId]) {
                   var animated = startVehicleAnimation(pos.deviceId, pos.latitude, pos.longitude, pos.course);
                   if (!animated) {
                     vehicleMarkers[pos.deviceId].setLatLng(L.latLng(pos.latitude, pos.longitude));
                   }
-                  // Update icon color (green=moving, red=stopped)
                   var icon = getVehicleIcon(v.category, pos.speed, pos.course);
                   if (!vehicleAnimations[pos.deviceId]) {
                     vehicleMarkers[pos.deviceId].setIcon(icon);
@@ -3297,15 +3291,18 @@
                   }
                   vehicleMarkers[pos.deviceId].setPopupContent(buildPopupContent(v));
                 }
-
-                // Update sidebar speed
                 updateVehicleCardSpeed(pos.deviceId, pos.speed);
               }
             });
             updateTrackingStats(allVehicleData);
           }
+        } catch(e) { console.error('[HSQ-SSE] Parse error:', e); }
+      });
 
-          if (msg.type === 'devices' && msg.devices) {
+      trackingSSE.addEventListener('devices', function(event) {
+        try {
+          var msg = JSON.parse(event.data);
+          if (msg.devices) {
             msg.devices.forEach(function(dev) {
               var v = allVehicleData.find(function(x) { return x.deviceId === dev.deviceId; });
               if (v) {
@@ -3317,21 +3314,17 @@
             renderVehicleList(allVehicleData);
             updateTrackingStats(allVehicleData);
           }
-        } catch(e) { console.error('[HSQ-WS] Parse error:', e); }
-      };
+        } catch(e) { console.error('[HSQ-SSE] Parse error:', e); }
+      });
 
-      trackingWs.onclose = function(event) {
-        wsConnected = false;
-        console.log('[HSQ-WS] Disconnected. Reconnecting in 3s...', event.code);
-        // Fallback to polling while disconnected
+      trackingSSE.onerror = function(err) {
+        sseConnected = false;
+        console.log('[HSQ-SSE] Connection lost. Reconnecting...');
+        if (trackingSSE) { try { trackingSSE.close(); } catch(e) {} trackingSSE = null; }
         if (!trackingInterval) {
           trackingInterval = setInterval(loadTrackingPositions, 5000);
         }
-        wsReconnectTimer = setTimeout(connectTrackingWebSocket, 3000);
-      };
-
-      trackingWs.onerror = function(err) {
-        console.error('[HSQ-WS] Error:', err);
+        sseReconnectTimer = setTimeout(connectTrackingSSE, 3000);
       };
     }
 
@@ -3346,10 +3339,10 @@
       });
     }
 
-    function disconnectTrackingWebSocket() {
-      if (trackingWs) { try { trackingWs.close(); } catch(e) {} trackingWs = null; }
-      if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-      wsConnected = false;
+    function disconnectTrackingSSE() {
+      if (trackingSSE) { try { trackingSSE.close(); } catch(e) {} trackingSSE = null; }
+      if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
+      sseConnected = false;
     }
 
     function showTrackingPage() {
@@ -3364,10 +3357,10 @@
         console.log('[HSQ] showTrackingPage: loading positions...');
         loadTrackingPositions(); // Initial load via HTTP
         try { initTrackingMap(); } catch(e) { console.error('[HSQ] Map init error:', e); }
-        // Start WebSocket for real-time updates (replaces polling)
-        connectTrackingWebSocket();
-        // Polling as fallback only (WebSocket will disable it once connected)
-        if (!trackingInterval && !wsConnected) {
+        // Start SSE for real-time updates (replaces polling)
+        connectTrackingSSE();
+        // Polling as fallback only (SSE will disable it once connected)
+        if (!trackingInterval && !sseConnected) {
           trackingInterval = setInterval(loadTrackingPositions, 5000);
         }
         // Force map resize after it becomes visible (critical for Leaflet)
@@ -3383,7 +3376,7 @@
 
     function goBackFromTracking() {
       if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
-      disconnectTrackingWebSocket();
+      disconnectTrackingSSE();
       showPage('page-admin');
     }
 
