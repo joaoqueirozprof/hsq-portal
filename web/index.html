@@ -3905,7 +3905,7 @@
       progDiv.innerHTML = '<div style="color:#e2e8f0;font-size:16px;font-weight:600;">Exportando Video HD...</div>' +
         '<div style="color:#94a3b8;font-size:12px;margin-top:4px;" id="export-status">Preparando...</div>' +
         '<div class="export-progress-bar"><div class="export-progress-fill" id="export-pbar" style="width:0%"></div></div>' +
-        '<div style="color:#64748b;font-size:11px;margin-top:4px;" id="export-info">1280x720 HD | Zoom de rua</div>' +
+        '<div style="color:#64748b;font-size:11px;margin-top:4px;" id="export-info">1920x1080 Full HD | Zoom de rua | 10Mbps</div>' +
         '<button onclick="cancelVideoExport()" style="margin-top:8px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 14px;border-radius:8px;cursor:pointer;font-size:11px;">Cancelar</button>';
       document.getElementById('replay-map-container').appendChild(progDiv);
       window._exportCancelled = false;
@@ -3923,9 +3923,9 @@
         } catch(e) { console.warn('mp4-muxer unavailable'); }
       }
 
-      // === HD VIDEO CONFIG ===
-      var captureW = 1280;
-      var captureH = 720;
+      // === FULL HD VIDEO CONFIG ===
+      var captureW = 1920;
+      var captureH = 1080;
       var fps = 10;
       var frameDuration = 1000000 / fps;
       var streetZoom = 17;
@@ -3956,7 +3956,7 @@
             output: function(chunk, meta) { muxer.addVideoChunk(chunk, meta); },
             error: function(e) { console.error('Enc err:', e); }
           });
-          encoder.configure({ codec: 'avc1.640028', width: captureW, height: captureH, bitrate: 5000000, framerate: fps });
+          encoder.configure({ codec: 'avc1.640028', width: captureW, height: captureH, bitrate: 10000000, framerate: fps });
         } catch(e) { canMP4 = false; console.warn('VideoEncoder fail:', e); }
       }
       if (!canMP4) {
@@ -3965,7 +3965,7 @@
         outCtx = outCanvas.getContext('2d');
         var stream = outCanvas.captureStream(fps);
         var mt = MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
-        recorder = new MediaRecorder(stream, { mimeType: mt, videoBitsPerSecond: 5000000 });
+        recorder = new MediaRecorder(stream, { mimeType: mt, videoBitsPerSecond: 10000000 });
         recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
         recorder.start();
       }
@@ -3983,13 +3983,13 @@
 
         // Follow vehicle at street level
         replayMap.setView([pt.lat, pt.lng], streetZoom, { animate: false });
-        // Wait for tiles to fully load
-        await new Promise(function(r) { setTimeout(r, 300); });
+        // Wait for tiles to fully load at high quality
+        await new Promise(function(r) { setTimeout(r, 500); });
 
         try {
           var cap = await html2canvas(mapContainer, {
-            useCORS: true, allowTaint: true, scale: 1.5, logging: false,
-            width: mapContainer.offsetWidth, height: mapContainer.offsetHeight, imageTimeout: 8000
+            useCORS: true, allowTaint: true, scale: 2.5, logging: false,
+            width: mapContainer.offsetWidth, height: mapContainer.offsetHeight, imageTimeout: 10000
           });
 
           // Create HD canvas
@@ -3999,28 +3999,28 @@
 
           // Top bar: vehicle name + speed
           hc.fillStyle = 'rgba(15,23,42,0.85)';
-          hc.fillRect(0, 0, captureW, 52);
+          hc.fillRect(0, 0, captureW, 60);
           hc.fillStyle = '#ffffff';
-          hc.font = 'bold 20px Arial, sans-serif';
-          hc.fillText(devName, 16, 34);
+          hc.font = 'bold 26px Arial, sans-serif';
+          hc.fillText(devName, 20, 40);
           var speedVal = Math.round(pt.speed);
           var speedColor = speedVal > 2 ? '#22c55e' : '#ef4444';
           hc.fillStyle = speedColor;
-          hc.font = 'bold 28px Arial, sans-serif';
+          hc.font = 'bold 34px Arial, sans-serif';
           hc.textAlign = 'right';
-          hc.fillText(speedVal + ' km/h', captureW - 16, 38);
+          hc.fillText(speedVal + ' km/h', captureW - 20, 42);
           hc.textAlign = 'left';
 
           // Bottom bar: time + watermark + progress
           hc.fillStyle = 'rgba(15,23,42,0.85)';
-          hc.fillRect(0, captureH - 48, captureW, 48);
+          hc.fillRect(0, captureH - 56, captureW, 56);
           hc.fillStyle = '#e2e8f0';
-          hc.font = '15px Arial, sans-serif';
-          hc.fillText(new Date(pt.time).toLocaleString('pt-BR'), 16, captureH - 18);
+          hc.font = '20px Arial, sans-serif';
+          hc.fillText(new Date(pt.time).toLocaleString('pt-BR'), 20, captureH - 20);
           hc.fillStyle = 'rgba(148,163,184,0.8)';
-          hc.font = 'bold 13px Arial, sans-serif';
+          hc.font = 'bold 16px Arial, sans-serif';
           hc.textAlign = 'right';
-          hc.fillText('HSQ Rastreamento', captureW - 16, captureH - 18);
+          hc.fillText('HSQ Rastreamento', captureW - 20, captureH - 20);
           hc.textAlign = 'left';
 
           // Green progress bar at very bottom
@@ -4043,7 +4043,7 @@
 
         var pct = Math.round((i / totalPoints) * 100);
         document.getElementById('export-pbar').style.width = pct + '%';
-        document.getElementById('export-status').textContent = 'Frame ' + frameCount + '/' + Math.ceil(totalPoints/step) + ' (' + pct + '%)';
+        document.getElementById('export-status').textContent = 'Frame ' + frameCount + '/' + Math.ceil(totalPoints/step) + ' (' + pct + '%) - Full HD 1920x1080';
       }
 
       if (window._exportCancelled) {
@@ -4090,7 +4090,7 @@
       a.click();
       setTimeout(function() { URL.revokeObjectURL(url); }, 15000);
       var sizeMB = (blob.size / (1024*1024)).toFixed(1);
-      showToast('Video HD exportado! (' + sizeMB + 'MB - ' + frameCount + ' frames - 1280x720)', 'success');
+      showToast('Video Full HD exportado! (' + sizeMB + 'MB - ' + frameCount + ' frames - 1920x1080)', 'success');
     }
 
     function cancelVideoExport() {
