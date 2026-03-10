@@ -65,9 +65,12 @@ app.get('/api/tracking/stream', (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
-  // Send 4KB padding to force proxy buffer flush (Hostinger host nginx buffers SSE)
-  const padding = ':' + ' '.repeat(4096) + '\n\n';
-  res.write(padding);
+  // Send large padding to force proxy buffer flush (Hostinger host nginx buffers SSE)
+  // Need to exceed proxy_buffers size (typically 8x8KB = 64KB)
+  for (let i = 0; i < 8; i++) {
+    res.write(':' + ' '.repeat(4096) + '\n');
+  }
+  res.write('\n');
   res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Real-time tracking active' })}\n\n`);
 
   const keepalive = setInterval(() => {
