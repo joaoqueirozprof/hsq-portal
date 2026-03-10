@@ -3139,6 +3139,101 @@
     var selectedVehicleId = null;
     var mapReady = false;
 
+    // ====== SMOOTH ANIMATION SYSTEM (like Uber) ======
+    var vehicleAnimations = {}; // { deviceId: { startLat, startLng, endLat, endLng, startCourse, endCourse, startTime, duration, animFrame } }
+    var previousPositions = {}; // { deviceId: { lat, lng, course } }
+    var ANIMATION_DURATION = 4500; // ms - smooth transition between position updates (slightly less than poll interval)
+
+    function animateVehicleMarker(deviceId) {
+      var anim = vehicleAnimations[deviceId];
+      if (!anim) return;
+      var marker = vehicleMarkers[deviceId];
+      if (!marker) return;
+
+      var now = Date.now();
+      var elapsed = now - anim.startTime;
+      var progress = Math.min(elapsed / anim.duration, 1);
+
+      // Ease-in-out cubic for natural movement feel
+      var t = progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+      // Interpolate lat/lng
+      var lat = anim.startLat + (anim.endLat - anim.startLat) * t;
+      var lng = anim.startLng + (anim.endLng - anim.startLng) * t;
+      marker.setLatLng(L.latLng(lat, lng));
+
+      // Interpolate rotation (course/heading) - shortest path
+      if (anim.startCourse !== undefined && anim.endCourse !== undefined) {
+        var diff = anim.endCourse - anim.startCourse;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        var currentCourse = anim.startCourse + diff * t;
+        if (currentCourse < 0) currentCourse += 360;
+        if (currentCourse >= 360) currentCourse -= 360;
+        // Update marker icon rotation
+        var iconEl = marker.getElement();
+        if (iconEl) {
+          var inner = iconEl.querySelector('div');
+          if (inner) inner.style.transform = 'rotate(' + Math.round(currentCourse) + 'deg)';
+        }
+      }
+
+      // If following this vehicle, pan map smoothly
+      if (selectedVehicleId == deviceId && trackingMap) {
+        trackingMap.panTo([lat, lng], { animate: false });
+      }
+
+      if (progress < 1) {
+        anim.animFrame = requestAnimationFrame(function() { animateVehicleMarker(deviceId); });
+      } else {
+        // Animation complete - store final position
+        previousPositions[deviceId] = { lat: anim.endLat, lng: anim.endLng, course: anim.endCourse };
+        delete vehicleAnimations[deviceId];
+      }
+    }
+
+    function startVehicleAnimation(deviceId, newLat, newLng, newCourse) {
+      // Cancel any running animation for this device
+      if (vehicleAnimations[deviceId] && vehicleAnimations[deviceId].animFrame) {
+        cancelAnimationFrame(vehicleAnimations[deviceId].animFrame);
+      }
+
+      var prev = previousPositions[deviceId];
+      if (!prev) {
+        // First time - just place it, no animation
+        previousPositions[deviceId] = { lat: newLat, lng: newLng, course: newCourse || 0 };
+        return false; // signal: no animation, just set position
+      }
+
+      // Skip animation if distance is too small (< 1 meter) or too large (> 10km = GPS jump)
+      var dlat = newLat - prev.lat;
+      var dlng = newLng - prev.lng;
+      var distApprox = Math.sqrt(dlat * dlat + dlng * dlng) * 111320; // rough meters
+      if (distApprox < 1 || distApprox > 10000) {
+        previousPositions[deviceId] = { lat: newLat, lng: newLng, course: newCourse || 0 };
+        return false; // just teleport
+      }
+
+      vehicleAnimations[deviceId] = {
+        startLat: prev.lat,
+        startLng: prev.lng,
+        endLat: newLat,
+        endLng: newLng,
+        startCourse: prev.course || 0,
+        endCourse: newCourse || 0,
+        startTime: Date.now(),
+        duration: ANIMATION_DURATION,
+        animFrame: null,
+      };
+
+      vehicleAnimations[deviceId].animFrame = requestAnimationFrame(function() {
+        animateVehicleMarker(deviceId);
+      });
+      return true; // animation started
+    }
+
     function showTrackingPage() {
       showPage('page-tracking');
       document.getElementById('tracking-user-name').textContent = currentUser ? currentUser.name : '';
@@ -3559,19 +3654,45 @@
         if (!pos || (pos.latitude === 0 && pos.longitude === 0)) return;
         var icon = getVehicleIcon(v.category, pos.speed, pos.course);
         if (vehicleMarkers[v.deviceId]) {
-          var marker = vehicleMarkers[v.deviceId];
-          marker.setLatLng(L.latLng(pos.latitude, pos.longitude));
-          marker.setIcon(icon);
-          marker.setPopupContent(buildPopupContent(v));
+          // Existing marker — animate smoothly to new position (like Uber)
+          var animated = startVehicleAnimation(v.deviceId, pos.latitude, pos.longitude, pos.course);
+          if (!animated) {
+            // No animation (too small/too far) — just set position
+            vehicleMarkers[v.deviceId].setLatLng(L.latLng(pos.latitude, pos.longitude));
+          }
+          // Update icon (color changes based on speed) — only if not animating rotation
+          if (!vehicleAnimations[v.deviceId]) {
+            vehicleMarkers[v.deviceId].setIcon(icon);
+          } else {
+            // During animation, update icon but keep rotation handled by animator
+            var moving = pos.speed > 2;
+            var iconEl = vehicleMarkers[v.deviceId].getElement();
+            if (iconEl) {
+              var inner = iconEl.querySelector('div');
+              if (inner) inner.style.background = moving ? '#22c55e' : '#ef4444';
+            }
+          }
+          vehicleMarkers[v.deviceId].setPopupContent(buildPopupContent(v));
         } else {
+          // New marker — place it and store initial position
           var marker = L.marker([pos.latitude, pos.longitude], { icon: icon })
             .addTo(trackingMap).bindPopup(buildPopupContent(v), { maxWidth: 280 });
           marker.on('click', function() { selectVehicle(v.deviceId); });
           vehicleMarkers[v.deviceId] = marker;
+          previousPositions[v.deviceId] = { lat: pos.latitude, lng: pos.longitude, course: pos.course || 0 };
         }
       });
+      // Remove markers for devices that are no longer active
       Object.keys(vehicleMarkers).forEach(function(id) {
-        if (!activeIds[id]) { trackingMap.removeLayer(vehicleMarkers[id]); delete vehicleMarkers[id]; }
+        if (!activeIds[id]) {
+          trackingMap.removeLayer(vehicleMarkers[id]);
+          delete vehicleMarkers[id];
+          delete previousPositions[id];
+          if (vehicleAnimations[id]) {
+            if (vehicleAnimations[id].animFrame) cancelAnimationFrame(vehicleAnimations[id].animFrame);
+            delete vehicleAnimations[id];
+          }
+        }
       });
       if (vehicles.length > 0 && !selectedVehicleId && !window._initialBoundsDone) {
         var bounds = [];
