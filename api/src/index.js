@@ -44,12 +44,36 @@ const limiter = rateLimit({
 });
 app.use('/api/auth', limiter);
 
-// SSE endpoint MUST be defined before tracking routes (to avoid auth middleware)
-// Actual handler is set up after bridge variables are initialized (see below)
+// ====== LONG POLLING for real-time tracking ======
+// Hostinger host nginx buffers SSE/WebSocket, so we use long polling instead.
+// Client polls /api/tracking/poll?since=<timestamp>, server holds request until
+// new data arrives or 25s timeout, then responds with positions/devices.
 const JWT_SECRET = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
-const sseClients = new Set();
 
-app.get('/api/tracking/stream', (req, res) => {
+// Shared buffer for latest Traccar data (filled by WS bridge below)
+let latestPositions = [];
+let latestDevices = [];
+let lastUpdateTime = 0;
+const pollWaiters = new Set(); // { res, since, timer }
+
+function notifyPollWaiters() {
+  const now = lastUpdateTime;
+  pollWaiters.forEach(waiter => {
+    if (waiter.since < now) {
+      clearTimeout(waiter.timer);
+      pollWaiters.delete(waiter);
+      try {
+        waiter.res.json({
+          positions: latestPositions,
+          devices: latestDevices,
+          timestamp: now,
+        });
+      } catch(e) {}
+    }
+  });
+}
+
+app.get('/api/tracking/poll', (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Token required' });
   try {
@@ -58,32 +82,29 @@ app.get('/api/tracking/stream', (req, res) => {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
+  const since = parseInt(req.query.since) || 0;
 
-  // Send large padding to force proxy buffer flush (Hostinger host nginx buffers SSE)
-  // Need to exceed proxy_buffers size (typically 8x8KB = 64KB)
-  for (let i = 0; i < 8; i++) {
-    res.write(':' + ' '.repeat(4096) + '\n');
+  // If we already have newer data, respond immediately
+  if (lastUpdateTime > since && (latestPositions.length > 0 || latestDevices.length > 0)) {
+    return res.json({
+      positions: latestPositions,
+      devices: latestDevices,
+      timestamp: lastUpdateTime,
+    });
   }
-  res.write('\n');
-  res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Real-time tracking active' })}\n\n`);
 
-  const keepalive = setInterval(() => {
-    try { res.write(': keepalive\n\n'); } catch(e) { clearInterval(keepalive); }
-  }, 15000);
+  // Otherwise hold the request until new data arrives (long poll)
+  const timer = setTimeout(() => {
+    pollWaiters.delete(waiter);
+    res.json({ positions: [], devices: [], timestamp: lastUpdateTime || Date.now() });
+  }, 25000); // 25s timeout (less than typical proxy timeout of 60s)
 
-  sseClients.add(res);
-  console.log('[SSE] Client connected. Total:', sseClients.size);
+  const waiter = { res, since, timer };
+  pollWaiters.add(waiter);
 
   req.on('close', () => {
-    clearInterval(keepalive);
-    sseClients.delete(res);
-    console.log('[SSE] Client disconnected. Total:', sseClients.size);
+    clearTimeout(timer);
+    pollWaiters.delete(waiter);
   });
 });
 
@@ -106,7 +127,7 @@ app.get('/api/health', async (req, res) => {
 
 // ====== TRACCAR REAL-TIME BRIDGE ======
 // Server-side: WebSocket to Traccar's native API
-// Client-side: SSE (Server-Sent Events) — works through any HTTP proxy
+// Client-side: Long polling — works through any HTTP proxy (Hostinger buffers SSE)
 const TRACCAR_URL = process.env.TRACCAR_URL || 'http://72.61.129.78:8082';
 const TRACCAR_ADMIN_EMAIL = process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com';
 const TRACCAR_ADMIN_PASSWORD = process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!';
@@ -135,13 +156,16 @@ async function getTraccarSession() {
   }
 }
 
-function broadcastToSSEClients(eventType, data) {
-  const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
-  // Add padding to ensure proxy buffer flush
-  const padded = payload + ':' + ' '.repeat(256) + '\n\n';
-  sseClients.forEach(client => {
-    try { client.write(padded); } catch(e) { sseClients.delete(client); }
-  });
+function onTraccarData(eventType, data) {
+  if (eventType === 'positions') {
+    latestPositions = data.positions || [];
+  }
+  if (eventType === 'devices') {
+    latestDevices = data.devices || [];
+  }
+  lastUpdateTime = Date.now();
+  // Wake up all long poll waiters
+  notifyPollWaiters();
 }
 
 function connectTraccarWebSocket() {
@@ -163,14 +187,14 @@ function connectTraccarWebSocket() {
   traccarWs = new WebSocket(wsUrl, { headers: { Cookie: traccarSession } });
 
   traccarWs.on('open', () => {
-    console.log('[Bridge] Connected to Traccar! SSE clients:', sseClients.size);
+    console.log('[Bridge] Connected to Traccar! Poll waiters:', pollWaiters.size);
   });
 
   traccarWs.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString());
       if (msg.positions && msg.positions.length > 0) {
-        broadcastToSSEClients('positions', {
+        onTraccarData('positions', {
           positions: msg.positions.map(p => ({
             deviceId: p.deviceId,
             latitude: p.latitude,
@@ -185,7 +209,7 @@ function connectTraccarWebSocket() {
         });
       }
       if (msg.devices && msg.devices.length > 0) {
-        broadcastToSSEClients('devices', {
+        onTraccarData('devices', {
           devices: msg.devices.map(d => ({
             deviceId: d.id,
             name: d.name,
@@ -215,7 +239,7 @@ function connectTraccarWebSocket() {
 const PORT = process.env.PORT || 4080;
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`HSQ Portal API running on port ${PORT}`);
-  console.log(`SSE endpoint: /api/tracking/stream`);
+  console.log(`Long poll endpoint: /api/tracking/poll`);
   // Run seed
   try {
     const seed = require('./seed');

@@ -3236,35 +3236,42 @@
       return true; // animation started
     }
 
-    // ====== SSE REAL-TIME CONNECTION ======
-    // Uses Server-Sent Events (works through any HTTP proxy, no WebSocket upgrade needed)
-    var trackingSSE = null;
-    var sseReconnectTimer = null;
-    var sseConnected = false;
+    // ====== LONG POLLING REAL-TIME CONNECTION ======
+    // Uses long polling (works through any HTTP proxy, including Hostinger's buffering nginx)
+    var longPollActive = false;
+    var longPollAbort = null;
+    var lastPollTimestamp = 0;
 
-    function connectTrackingSSE() {
-      if (trackingSSE) { try { trackingSSE.close(); } catch(e) {} }
-      if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
+    function startLongPoll() {
+      if (longPollActive) return;
+      longPollActive = true;
+      console.log('[HSQ-Poll] Starting real-time long polling...');
+      // Stop regular interval polling since long poll handles it
+      if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
+      doPollCycle();
+    }
+
+    function doPollCycle() {
+      if (!longPollActive) return;
 
       var token = localStorage.getItem('hsq_token');
-      if (!token) return;
+      if (!token) { longPollActive = false; return; }
 
-      var sseUrl = '/api/tracking/stream?token=' + encodeURIComponent(token);
-      console.log('[HSQ-SSE] Connecting to real-time stream...');
+      var pollUrl = '/api/tracking/poll?token=' + encodeURIComponent(token) + '&since=' + lastPollTimestamp;
 
-      trackingSSE = new EventSource(sseUrl);
+      var controller = new AbortController();
+      longPollAbort = controller;
 
-      trackingSSE.addEventListener('connected', function(event) {
-        sseConnected = true;
-        console.log('[HSQ-SSE] Connected! Real-time tracking active.');
-        if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
-      });
+      fetch(pollUrl, { signal: controller.signal })
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+          if (!longPollActive) return;
 
-      trackingSSE.addEventListener('positions', function(event) {
-        try {
-          var msg = JSON.parse(event.data);
-          if (msg.positions) {
-            msg.positions.forEach(function(pos) {
+          if (data.timestamp) lastPollTimestamp = data.timestamp;
+
+          // Process positions
+          if (data.positions && data.positions.length > 0) {
+            data.positions.forEach(function(pos) {
               var v = allVehicleData.find(function(x) { return x.deviceId === pos.deviceId; });
               if (v && v.position) {
                 v.position.latitude = pos.latitude;
@@ -3298,14 +3305,10 @@
             });
             updateTrackingStats(allVehicleData);
           }
-        } catch(e) { console.error('[HSQ-SSE] Parse error:', e); }
-      });
 
-      trackingSSE.addEventListener('devices', function(event) {
-        try {
-          var msg = JSON.parse(event.data);
-          if (msg.devices) {
-            msg.devices.forEach(function(dev) {
+          // Process devices
+          if (data.devices && data.devices.length > 0) {
+            data.devices.forEach(function(dev) {
               var v = allVehicleData.find(function(x) { return x.deviceId === dev.deviceId; });
               if (v) {
                 v.status = dev.status;
@@ -3316,18 +3319,16 @@
             renderVehicleList(allVehicleData);
             updateTrackingStats(allVehicleData);
           }
-        } catch(e) { console.error('[HSQ-SSE] Parse error:', e); }
-      });
 
-      trackingSSE.onerror = function(err) {
-        sseConnected = false;
-        console.log('[HSQ-SSE] Connection lost. Reconnecting...');
-        if (trackingSSE) { try { trackingSSE.close(); } catch(e) {} trackingSSE = null; }
-        if (!trackingInterval) {
-          trackingInterval = setInterval(loadTrackingPositions, 5000);
-        }
-        sseReconnectTimer = setTimeout(connectTrackingSSE, 3000);
-      };
+          // Immediately start next poll cycle
+          doPollCycle();
+        })
+        .catch(function(err) {
+          if (!longPollActive) return;
+          if (err.name === 'AbortError') return;
+          console.log('[HSQ-Poll] Error, retrying in 2s:', err.message);
+          setTimeout(doPollCycle, 2000);
+        });
     }
 
     function updateVehicleCardSpeed(deviceId, speed) {
@@ -3341,10 +3342,9 @@
       });
     }
 
-    function disconnectTrackingSSE() {
-      if (trackingSSE) { try { trackingSSE.close(); } catch(e) {} trackingSSE = null; }
-      if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null; }
-      sseConnected = false;
+    function stopLongPoll() {
+      longPollActive = false;
+      if (longPollAbort) { try { longPollAbort.abort(); } catch(e) {} longPollAbort = null; }
     }
 
     function showTrackingPage() {
@@ -3359,12 +3359,8 @@
         console.log('[HSQ] showTrackingPage: loading positions...');
         loadTrackingPositions(); // Initial load via HTTP
         try { initTrackingMap(); } catch(e) { console.error('[HSQ] Map init error:', e); }
-        // Start SSE for real-time updates (replaces polling)
-        connectTrackingSSE();
-        // Polling as fallback only (SSE will disable it once connected)
-        if (!trackingInterval && !sseConnected) {
-          trackingInterval = setInterval(loadTrackingPositions, 5000);
-        }
+        // Start long polling for real-time updates
+        startLongPoll();
         // Force map resize after it becomes visible (critical for Leaflet)
         [200, 500, 1000, 2000].forEach(function(d) {
           setTimeout(function() {
@@ -3378,7 +3374,7 @@
 
     function goBackFromTracking() {
       if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
-      disconnectTrackingSSE();
+      stopLongPoll();
       showPage('page-admin');
     }
 
