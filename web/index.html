@@ -3260,35 +3260,68 @@
       }
     }
 
+    // Calculate bearing between two points (returns 0-360, 0=North)
+    function calcBearing(lat1, lng1, lat2, lng2) {
+      var dLng = (lng2 - lng1) * Math.PI / 180;
+      var y = Math.sin(dLng) * Math.cos(lat2 * Math.PI / 180);
+      var x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLng);
+      var brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
     function startVehicleAnimation(deviceId, newLat, newLng, newCourse) {
-      // Cancel any running animation for this device
-      if (vehicleAnimations[deviceId] && vehicleAnimations[deviceId].animFrame) {
-        cancelAnimationFrame(vehicleAnimations[deviceId].animFrame);
+      // If animation is already running, grab current interpolated position as start
+      var currentAnim = vehicleAnimations[deviceId];
+      var startFrom = previousPositions[deviceId];
+
+      if (currentAnim && currentAnim.animFrame) {
+        cancelAnimationFrame(currentAnim.animFrame);
+        // Calculate where the animation was when interrupted
+        var elapsed = Date.now() - currentAnim.startTime;
+        var progress = Math.min(elapsed / currentAnim.duration, 1);
+        var t = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        var midLat = currentAnim.startLat + (currentAnim.endLat - currentAnim.startLat) * t;
+        var midLng = currentAnim.startLng + (currentAnim.endLng - currentAnim.startLng) * t;
+        var midDiff = currentAnim.endCourse - currentAnim.startCourse;
+        if (midDiff > 180) midDiff -= 360;
+        if (midDiff < -180) midDiff += 360;
+        var midCourse = currentAnim.startCourse + midDiff * t;
+        if (midCourse < 0) midCourse += 360;
+        if (midCourse >= 360) midCourse -= 360;
+        startFrom = { lat: midLat, lng: midLng, course: midCourse };
       }
 
-      var prev = previousPositions[deviceId];
-      if (!prev) {
+      if (!startFrom) {
         // First time - just place it, no animation
         previousPositions[deviceId] = { lat: newLat, lng: newLng, course: newCourse || 0 };
-        return false; // signal: no animation, just set position
+        return false;
       }
 
       // Skip animation if distance is too small (< 1 meter) or too large (> 10km = GPS jump)
-      var dlat = newLat - prev.lat;
-      var dlng = newLng - prev.lng;
-      var distApprox = Math.sqrt(dlat * dlat + dlng * dlng) * 111320; // rough meters
+      var dlat = newLat - startFrom.lat;
+      var dlng = newLng - startFrom.lng;
+      var distApprox = Math.sqrt(dlat * dlat + dlng * dlng) * 111320;
       if (distApprox < 1 || distApprox > 10000) {
-        previousPositions[deviceId] = { lat: newLat, lng: newLng, course: newCourse || 0 };
-        return false; // just teleport
+        previousPositions[deviceId] = { lat: newLat, lng: newLng, course: newCourse || startFrom.course || 0 };
+        return false;
+      }
+
+      // If course is 0 or not provided, calculate from movement direction
+      var effectiveCourse = newCourse;
+      if (!effectiveCourse || effectiveCourse === 0) {
+        effectiveCourse = calcBearing(startFrom.lat, startFrom.lng, newLat, newLng);
       }
 
       vehicleAnimations[deviceId] = {
-        startLat: prev.lat,
-        startLng: prev.lng,
+        startLat: startFrom.lat,
+        startLng: startFrom.lng,
         endLat: newLat,
         endLng: newLng,
-        startCourse: prev.course || 0,
-        endCourse: newCourse || 0,
+        startCourse: startFrom.course || 0,
+        endCourse: effectiveCourse,
         startTime: Date.now(),
         duration: ANIMATION_DURATION,
         animFrame: null,
@@ -3297,7 +3330,7 @@
       vehicleAnimations[deviceId].animFrame = requestAnimationFrame(function() {
         animateVehicleMarker(deviceId);
       });
-      return true; // animation started
+      return true;
     }
 
     // ====== LONG POLLING REAL-TIME CONNECTION ======
