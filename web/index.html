@@ -3142,7 +3142,7 @@
     // ====== SMOOTH ANIMATION SYSTEM (like Uber) ======
     var vehicleAnimations = {}; // { deviceId: { startLat, startLng, endLat, endLng, startCourse, endCourse, startTime, duration, animFrame } }
     var previousPositions = {}; // { deviceId: { lat, lng, course } }
-    var ANIMATION_DURATION = 4500; // ms - smooth transition between position updates (slightly less than poll interval)
+    var ANIMATION_DURATION = 9000; // ms - smooth transition synced with GT06 10s interval (leaves 1s buffer)
 
     function animateVehicleMarker(deviceId) {
       var anim = vehicleAnimations[deviceId];
@@ -3234,6 +3234,124 @@
       return true; // animation started
     }
 
+    // ====== WEBSOCKET REAL-TIME CONNECTION ======
+    var trackingWs = null;
+    var wsReconnectTimer = null;
+    var wsConnected = false;
+
+    function connectTrackingWebSocket() {
+      if (trackingWs) { try { trackingWs.close(); } catch(e) {} }
+      if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+
+      var token = localStorage.getItem('hsq_token');
+      if (!token) return;
+
+      var wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var wsUrl = wsProtocol + '//' + location.host + '/ws/tracking?token=' + token;
+      console.log('[HSQ-WS] Connecting:', wsUrl);
+
+      trackingWs = new WebSocket(wsUrl);
+
+      trackingWs.onopen = function() {
+        wsConnected = true;
+        console.log('[HSQ-WS] Connected! Real-time tracking active.');
+        // Stop polling fallback if running
+        if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
+      };
+
+      trackingWs.onmessage = function(event) {
+        try {
+          var msg = JSON.parse(event.data);
+
+          if (msg.type === 'positions' && msg.positions) {
+            // Real-time position update from Traccar
+            msg.positions.forEach(function(pos) {
+              // Find vehicle in allVehicleData and update
+              var v = allVehicleData.find(function(x) { return x.deviceId === pos.deviceId; });
+              if (v && v.position) {
+                v.position.latitude = pos.latitude;
+                v.position.longitude = pos.longitude;
+                v.position.speed = pos.speed;
+                v.position.course = pos.course;
+                v.position.fixTime = pos.fixTime;
+                v.position.altitude = pos.altitude;
+                v.position.accuracy = pos.accuracy;
+                v.position.attributes = pos.attributes;
+
+                // Animate marker smoothly on map
+                if (mapReady && trackingMap && vehicleMarkers[pos.deviceId]) {
+                  var animated = startVehicleAnimation(pos.deviceId, pos.latitude, pos.longitude, pos.course);
+                  if (!animated) {
+                    vehicleMarkers[pos.deviceId].setLatLng(L.latLng(pos.latitude, pos.longitude));
+                  }
+                  // Update icon color (green=moving, red=stopped)
+                  var icon = getVehicleIcon(v.category, pos.speed, pos.course);
+                  if (!vehicleAnimations[pos.deviceId]) {
+                    vehicleMarkers[pos.deviceId].setIcon(icon);
+                  } else {
+                    var iconEl = vehicleMarkers[pos.deviceId].getElement();
+                    if (iconEl) {
+                      var inner = iconEl.querySelector('div');
+                      if (inner) inner.style.background = pos.speed > 2 ? '#22c55e' : '#ef4444';
+                    }
+                  }
+                  vehicleMarkers[pos.deviceId].setPopupContent(buildPopupContent(v));
+                }
+
+                // Update sidebar speed
+                updateVehicleCardSpeed(pos.deviceId, pos.speed);
+              }
+            });
+            updateTrackingStats(allVehicleData);
+          }
+
+          if (msg.type === 'devices' && msg.devices) {
+            msg.devices.forEach(function(dev) {
+              var v = allVehicleData.find(function(x) { return x.deviceId === dev.deviceId; });
+              if (v) {
+                v.status = dev.status;
+                v.name = dev.name;
+                v.lastUpdate = dev.lastUpdate;
+              }
+            });
+            renderVehicleList(allVehicleData);
+            updateTrackingStats(allVehicleData);
+          }
+        } catch(e) { console.error('[HSQ-WS] Parse error:', e); }
+      };
+
+      trackingWs.onclose = function(event) {
+        wsConnected = false;
+        console.log('[HSQ-WS] Disconnected. Reconnecting in 3s...', event.code);
+        // Fallback to polling while disconnected
+        if (!trackingInterval) {
+          trackingInterval = setInterval(loadTrackingPositions, 5000);
+        }
+        wsReconnectTimer = setTimeout(connectTrackingWebSocket, 3000);
+      };
+
+      trackingWs.onerror = function(err) {
+        console.error('[HSQ-WS] Error:', err);
+      };
+    }
+
+    function updateVehicleCardSpeed(deviceId, speed) {
+      var cards = document.querySelectorAll('.vehicle-card');
+      cards.forEach(function(card) {
+        var onclick = card.getAttribute('onclick');
+        if (onclick && onclick.indexOf(deviceId) !== -1) {
+          var speedEl = card.querySelector('.v-speed');
+          if (speedEl) speedEl.textContent = speed + ' km/h';
+        }
+      });
+    }
+
+    function disconnectTrackingWebSocket() {
+      if (trackingWs) { try { trackingWs.close(); } catch(e) {} trackingWs = null; }
+      if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+      wsConnected = false;
+    }
+
     function showTrackingPage() {
       showPage('page-tracking');
       document.getElementById('tracking-user-name').textContent = currentUser ? currentUser.name : '';
@@ -3244,9 +3362,12 @@
       // Wait for DOM to be fully visible before initializing map
       setTimeout(function() {
         console.log('[HSQ] showTrackingPage: loading positions...');
-        loadTrackingPositions();
+        loadTrackingPositions(); // Initial load via HTTP
         try { initTrackingMap(); } catch(e) { console.error('[HSQ] Map init error:', e); }
-        if (!trackingInterval) {
+        // Start WebSocket for real-time updates (replaces polling)
+        connectTrackingWebSocket();
+        // Polling as fallback only (WebSocket will disable it once connected)
+        if (!trackingInterval && !wsConnected) {
           trackingInterval = setInterval(loadTrackingPositions, 5000);
         }
         // Force map resize after it becomes visible (critical for Leaflet)
@@ -3262,6 +3383,7 @@
 
     function goBackFromTracking() {
       if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
+      disconnectTrackingWebSocket();
       showPage('page-admin');
     }
 
