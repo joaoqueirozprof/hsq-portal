@@ -2019,6 +2019,23 @@
       var canvas = document.getElementById('login-map-canvas');
       if (!canvas) return;
       var ctx = canvas.getContext('2d');
+      // Polyfill roundRect for older browsers
+      if (!ctx.roundRect) {
+        CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+          if (typeof r === 'number') r = [r, r, r, r];
+          var rr = r[0];
+          this.moveTo(x + rr, y);
+          this.lineTo(x + w - rr, y);
+          this.quadraticCurveTo(x + w, y, x + w, y + rr);
+          this.lineTo(x + w, y + h - rr);
+          this.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+          this.lineTo(x + rr, y + h);
+          this.quadraticCurveTo(x, y + h, x, y + h - rr);
+          this.lineTo(x, y + rr);
+          this.quadraticCurveTo(x, y, x + rr, y);
+          this.closePath();
+        };
+      }
       var W, H;
 
       function resize() {
@@ -2028,16 +2045,16 @@
       resize();
       window.addEventListener('resize', resize);
 
-      // Vehicle emoji types with labels
+      // Vehicle shape types (no emoji/font — pure geometric shapes)
       var vehicleTypes = [
-        { emoji: '\uD83D\uDE97', name: 'carro', size: 24 },     // car
-        { emoji: '\uD83D\uDE99', name: 'suv', size: 24 },       // SUV
-        { emoji: '\uD83D\uDE9A', name: 'caminhao', size: 28 },  // truck
-        { emoji: '\uD83D\uDE9B', name: 'carreta', size: 28 },   // semi
-        { emoji: '\uD83C\uDFCD\uFE0F', name: 'moto', size: 22 },// motorcycle
-        { emoji: '\uD83D\uDE95', name: 'taxi', size: 24 },      // taxi
-        { emoji: '\uD83D\uDE90', name: 'van', size: 26 },       // van
-        { emoji: '\uD83D\uDE8C', name: 'onibus', size: 28 },    // bus
+        { shape: 'car', size: 12 },
+        { shape: 'car', size: 13 },
+        { shape: 'truck', size: 16 },
+        { shape: 'truck', size: 18 },
+        { shape: 'moto', size: 10 },
+        { shape: 'car', size: 12 },
+        { shape: 'van', size: 15 },
+        { shape: 'bus', size: 18 },
       ];
       var trailColors = ['#22c55e', '#3b82f6', '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899'];
 
@@ -2058,7 +2075,7 @@
       }
       genRoads();
 
-      // Vehicles — only move HORIZONTALLY (emojis are designed to face left/right)
+      // Vehicles — only move HORIZONTALLY on the road grid
       var vehicles = [];
       function spawnVehicle() {
         var type = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
@@ -2220,25 +2237,67 @@
             ctx.shadowBlur = 0;
           }
 
-          // Draw vehicle as a simple arrow shape (no emoji = no font loading)
+          // Draw vehicle as shape specific to type (no fonts/emoji)
           var rgb = hexToRgb(v.color);
-          var s = v.type.size * 0.5;
+          var s = v.type.size;
           ctx.save();
           ctx.translate(v.x, v.y);
-          // Arrow points in direction of movement
           if (v.direction === -1) ctx.scale(-1, 1);
-          // Draw arrow body
-          ctx.beginPath();
-          ctx.moveTo(s, 0);           // nose
-          ctx.lineTo(-s * 0.6, -s * 0.5);  // top-back
-          ctx.lineTo(-s * 0.3, 0);    // indent
-          ctx.lineTo(-s * 0.6, s * 0.5);   // bottom-back
-          ctx.closePath();
-          ctx.fillStyle = v.color;
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.8)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
+
+          if (v.type.shape === 'truck') {
+            // Truck: cabin + cargo box
+            ctx.fillStyle = v.color;
+            ctx.fillRect(-s * 0.5, -s * 0.3, s * 0.55, s * 0.6); // cargo
+            ctx.fillStyle = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.7)';
+            ctx.fillRect(s * 0.1, -s * 0.25, s * 0.4, s * 0.5); // cabin
+            // Wheels
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(-s * 0.4, -s * 0.35, 3, 3);
+            ctx.fillRect(-s * 0.4, s * 0.15, 3, 3);
+            ctx.fillRect(s * 0.3, -s * 0.35, 3, 3);
+            ctx.fillRect(s * 0.3, s * 0.15, 3, 3);
+          } else if (v.type.shape === 'moto') {
+            // Motorcycle: thin elongated shape
+            ctx.beginPath();
+            ctx.ellipse(0, 0, s * 0.6, s * 0.2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = v.color;
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(s * 0.45, 0, 2, 0, Math.PI * 2);
+            ctx.arc(-s * 0.45, 0, 2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fill();
+          } else if (v.type.shape === 'bus') {
+            // Bus: long rounded rectangle
+            var bw = s * 1.1, bh = s * 0.45;
+            ctx.beginPath();
+            ctx.roundRect(-bw/2, -bh/2, bw, bh, 3);
+            ctx.fillStyle = v.color;
+            ctx.fill();
+            // Windows
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            for (var wi = 0; wi < 4; wi++) {
+              ctx.fillRect(-bw/2 + 4 + wi * (bw - 8) / 4, -bh/2 + 2, (bw - 12) / 5, bh * 0.35);
+            }
+          } else if (v.type.shape === 'van') {
+            // Van: box shape
+            var vw = s * 0.8, vh = s * 0.45;
+            ctx.beginPath();
+            ctx.roundRect(-vw/2, -vh/2, vw, vh, 2);
+            ctx.fillStyle = v.color;
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillRect(vw * 0.1, -vh/2 + 2, vw * 0.3, vh * 0.4);
+          } else {
+            // Car (default): rounded shape
+            ctx.beginPath();
+            ctx.roundRect(-s * 0.4, -s * 0.25, s * 0.8, s * 0.5, 3);
+            ctx.fillStyle = v.color;
+            ctx.fill();
+            // Windshield
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillRect(s * 0.15, -s * 0.18, s * 0.2, s * 0.36);
+          }
           ctx.restore();
         });
 
@@ -3752,26 +3811,60 @@
       var color = moving ? '#22c55e' : '#ef4444';
       var borderColor = moving ? '#16a34a' : '#dc2626';
       var rotation = course || 0;
+      var size = 42;
 
-      // SVG arrow pointing up (0°=North), rotated by course
-      // The arrow is inside a circle with a white border
-      var size = 36;
+      // Vehicle-type specific SVG paths (facing UP/North by default)
+      var vehiclePath = '';
+      var cat = (category || 'car').toLowerCase();
+
+      if (cat === 'truck' || cat === 'lorry') {
+        // Truck icon - cabin + cargo box
+        vehiclePath =
+          '<rect x="13" y="10" width="10" height="16" rx="1.5" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<rect x="14" y="11" width="8" height="4" rx="1" fill="' + borderColor + '" opacity="0.3"/>' +
+          '<rect x="12" y="24" width="12" height="5" rx="1" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<circle cx="15" cy="30" r="1.5" fill="' + borderColor + '"/>' +
+          '<circle cx="21" cy="30" r="1.5" fill="' + borderColor + '"/>';
+      } else if (cat === 'motorcycle' || cat === 'moto') {
+        // Motorcycle icon - simple bike shape
+        vehiclePath =
+          '<ellipse cx="18" cy="12" rx="2.5" ry="2" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<rect x="16.5" y="14" width="3" height="10" rx="1.5" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<circle cx="18" cy="10" r="1.8" fill="' + borderColor + '"/>' +
+          '<circle cx="18" cy="27" r="2.5" fill="none" stroke="white" stroke-width="1.5"/>' +
+          '<circle cx="18" cy="27" r="1" fill="white"/>';
+      } else if (cat === 'bus' || cat === 'onibus') {
+        // Bus icon - long rectangular body
+        vehiclePath =
+          '<rect x="12" y="9" width="12" height="20" rx="2.5" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<rect x="13.5" y="10.5" width="9" height="4" rx="1" fill="' + borderColor + '" opacity="0.3"/>' +
+          '<rect x="13.5" y="16" width="9" height="2.5" rx="0.5" fill="' + borderColor + '" opacity="0.15"/>' +
+          '<rect x="13.5" y="20" width="9" height="2.5" rx="0.5" fill="' + borderColor + '" opacity="0.15"/>' +
+          '<circle cx="15" cy="30" r="1.5" fill="' + borderColor + '"/>' +
+          '<circle cx="21" cy="30" r="1.5" fill="' + borderColor + '"/>';
+      } else if (cat === 'van' || cat === 'furgao') {
+        // Van icon - taller box shape
+        vehiclePath =
+          '<rect x="12.5" y="10" width="11" height="18" rx="2" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<rect x="14" y="11" width="8" height="5" rx="1.5" fill="' + borderColor + '" opacity="0.3"/>' +
+          '<line x1="14" y1="20" x2="22" y2="20" stroke="' + borderColor + '" stroke-width="0.5" opacity="0.3"/>' +
+          '<circle cx="15" cy="29" r="1.5" fill="' + borderColor + '"/>' +
+          '<circle cx="21" cy="29" r="1.5" fill="' + borderColor + '"/>';
+      } else {
+        // Car icon (default) - sedan shape
+        vehiclePath =
+          '<rect x="13" y="12" width="10" height="15" rx="3" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
+          '<rect x="14" y="13" width="8" height="4" rx="1.5" fill="' + borderColor + '" opacity="0.3"/>' +
+          '<circle cx="15.5" cy="28" r="1.5" fill="' + borderColor + '"/>' +
+          '<circle cx="20.5" cy="28" r="1.5" fill="' + borderColor + '"/>';
+      }
+
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 36 36">' +
-        '<circle cx="18" cy="18" r="16" fill="' + color + '" stroke="white" stroke-width="2.5"/>' +
+        '<circle cx="18" cy="18" r="16.5" fill="' + color + '" stroke="white" stroke-width="2"/>' +
         '<g transform="rotate(' + rotation + ' 18 18)">' +
-        // Arrow pointing UP (north) - looks like a navigation arrow
-        '<path d="M18 7 L24 25 L18 20 L12 25 Z" fill="white" stroke="' + borderColor + '" stroke-width="0.5"/>' +
-        '</g>';
-
-      // Small label for vehicle type
-      var label = '';
-      if (category === 'truck') label = 'C';
-      else if (category === 'motorcycle') label = 'M';
-      else if (category === 'bus') label = 'B';
-      else if (category === 'van') label = 'V';
-      else if (category === 'car') label = 'A';
-
-      svg += '</svg>';
+        vehiclePath +
+        '</g>' +
+        '</svg>';
 
       var html = '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));">' + svg + '</div>';
 
