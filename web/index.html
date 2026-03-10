@@ -990,6 +990,125 @@
       font-weight: 600;
     }
 
+    /* Admin Tabs */
+    .admin-tabs {
+      display: flex;
+      gap: 0;
+      background: rgba(15, 23, 42, 0.8);
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+      padding: 0 24px;
+      overflow-x: auto;
+    }
+    .admin-tab {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .admin-tab:hover { color: #e2e8f0; background: rgba(51,65,85,0.2); }
+    .admin-tab.active {
+      color: #22c55e;
+      border-bottom-color: #22c55e;
+      background: rgba(34,197,94,0.05);
+    }
+    .admin-tab-content { display: none; }
+    .admin-tab-content.active { display: block; }
+
+    /* Replay controls */
+    .replay-form-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .replay-form-row .form-group { min-width: 160px; }
+
+    /* Replay Player */
+    .replay-player {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(51,65,85,0.5);
+      padding: 10px 16px;
+      z-index: 1000;
+    }
+    .replay-player-info {
+      display: flex;
+      justify-content: space-between;
+      color: #94a3b8;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .replay-player-info span:first-child { color: #e2e8f0; font-weight: 600; font-size: 13px; }
+    .replay-progress-bar {
+      position: relative;
+      height: 6px;
+      background: rgba(51,65,85,0.5);
+      border-radius: 3px;
+      margin-bottom: 8px;
+    }
+    .replay-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #4ade80);
+      border-radius: 3px;
+      transition: width 0.1s;
+    }
+    .replay-slider {
+      position: absolute;
+      top: -6px;
+      left: 0;
+      width: 100%;
+      height: 18px;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .replay-player-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+    }
+    .replay-btn {
+      background: rgba(51,65,85,0.5);
+      border: 1px solid rgba(51,65,85,0.5);
+      color: #e2e8f0;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .replay-btn:hover { background: rgba(51,65,85,0.8); }
+    .replay-btn-play {
+      background: rgba(34,197,94,0.2);
+      border-color: rgba(34,197,94,0.4);
+      color: #22c55e;
+      padding: 6px 20px;
+      font-size: 16px;
+    }
+    .replay-speed-select {
+      background: rgba(15,23,42,0.8);
+      border: 1px solid rgba(51,65,85,0.5);
+      color: #e2e8f0;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    /* Report tables */
+    .report-table { width: 100%; }
+    .report-table th { text-align: left; font-size: 12px; }
+    .report-table td { font-size: 13px; }
+
     /* Loading spinner */
     .spinner {
       display: inline-block;
@@ -1746,7 +1865,18 @@
       </div>
     </div>
 
+    <!-- Admin Tabs Navigation -->
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="switchAdminTab('tab-dashboard')">Dashboard</button>
+      <button class="admin-tab" onclick="switchAdminTab('tab-replay')">Replay de Rotas</button>
+      <button class="admin-tab" onclick="switchAdminTab('tab-reports')">Relatorios</button>
+      <button class="admin-tab" onclick="switchAdminTab('tab-geofences')">Geofences</button>
+    </div>
+
     <div class="admin-content">
+
+    <!-- ===== TAB: DASHBOARD (existing content) ===== -->
+    <div id="tab-dashboard" class="admin-tab-content active">
       <div class="stats-grid" id="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Total de Clientes</div>
@@ -1837,7 +1967,163 @@
           </table>
         </div>
       </div>
+    </div> <!-- end tab-dashboard -->
+
+    <!-- ===== TAB: REPLAY DE ROTAS ===== -->
+    <div id="tab-replay" class="admin-tab-content" style="display:none;">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h3>Replay de Rotas</h3>
+        </div>
+        <div style="padding:16px;">
+          <div class="replay-controls">
+            <div class="replay-form-row">
+              <div class="form-group" style="flex:1;">
+                <label>Dispositivo</label>
+                <select id="replay-device-select" class="form-input"><option value="">Selecione...</option></select>
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Data Inicio</label>
+                <input type="datetime-local" id="replay-from" class="form-input">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Data Fim</label>
+                <input type="datetime-local" id="replay-to" class="form-input">
+              </div>
+              <div class="form-group" style="align-self:flex-end;">
+                <button class="btn-add" onclick="loadReplay()">Carregar Rota</button>
+              </div>
+            </div>
+          </div>
+          <div id="replay-map-container" style="height:500px;border-radius:12px;overflow:hidden;margin-top:16px;background:#1e293b;position:relative;">
+            <div id="replay-map" style="width:100%;height:100%;"></div>
+            <!-- Replay player bar -->
+            <div id="replay-player" class="replay-player" style="display:none;">
+              <div class="replay-player-info">
+                <span id="replay-time-display">--:--:--</span>
+                <span id="replay-speed-display">0 km/h</span>
+                <span id="replay-point-display">0/0</span>
+              </div>
+              <div class="replay-progress-bar">
+                <div id="replay-progress" class="replay-progress-fill" style="width:0%"></div>
+                <input type="range" id="replay-slider" min="0" max="100" value="0" class="replay-slider" oninput="seekReplay(this.value)">
+              </div>
+              <div class="replay-player-buttons">
+                <button class="replay-btn" onclick="replayStepBack()" title="Ponto anterior">&#9664;&#9664;</button>
+                <button class="replay-btn replay-btn-play" id="replay-play-btn" onclick="toggleReplayPlay()">&#9654;</button>
+                <button class="replay-btn" onclick="replayStepForward()" title="Proximo ponto">&#9654;&#9654;</button>
+                <select id="replay-speed-select" class="replay-speed-select" onchange="setReplaySpeed(this.value)">
+                  <option value="1">1x</option>
+                  <option value="2">2x</option>
+                  <option value="5" selected>5x</option>
+                  <option value="10">10x</option>
+                  <option value="25">25x</option>
+                  <option value="50">50x</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="replay-stats" style="display:none;margin-top:16px;">
+            <div class="stats-grid">
+              <div class="stat-card"><div class="stat-label">Pontos</div><div class="stat-value" id="rstat-points">-</div></div>
+              <div class="stat-card"><div class="stat-label">Distancia Total</div><div class="stat-value" id="rstat-distance">-</div></div>
+              <div class="stat-card"><div class="stat-label">Vel. Maxima</div><div class="stat-value" id="rstat-maxspeed">-</div></div>
+              <div class="stat-card"><div class="stat-label">Duracao</div><div class="stat-value" id="rstat-duration">-</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- ===== TAB: RELATORIOS ===== -->
+    <div id="tab-reports" class="admin-tab-content" style="display:none;">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h3>Relatorios</h3>
+        </div>
+        <div style="padding:16px;">
+          <div class="replay-form-row">
+            <div class="form-group" style="flex:1;">
+              <label>Dispositivo</label>
+              <select id="report-device-select" class="form-input"><option value="">Selecione...</option></select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Data Inicio</label>
+              <input type="datetime-local" id="report-from" class="form-input">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Data Fim</label>
+              <input type="datetime-local" id="report-to" class="form-input">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Tipo de Relatorio</label>
+              <select id="report-type" class="form-input">
+                <option value="trips">Viagens</option>
+                <option value="stops">Paradas</option>
+                <option value="summary">Resumo</option>
+                <option value="events">Eventos</option>
+              </select>
+            </div>
+            <div class="form-group" style="align-self:flex-end;">
+              <button class="btn-add" onclick="loadReport()">Gerar Relatorio</button>
+            </div>
+          </div>
+          <div id="report-loading" style="display:none;text-align:center;padding:40px;color:#64748b;">
+            <span class="spinner"></span> Gerando relatorio...
+          </div>
+          <div id="report-results" style="margin-top:16px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: GEOFENCES ===== -->
+    <div id="tab-geofences" class="admin-tab-content" style="display:none;">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h3>Geofences (Cercas Virtuais)</h3>
+          <button class="btn-add" onclick="showNewGeofenceForm()">+ Nova Geofence</button>
+        </div>
+        <div style="padding:16px;">
+          <div id="geofence-map-container" style="height:400px;border-radius:12px;overflow:hidden;margin-bottom:16px;background:#1e293b;">
+            <div id="geofence-map" style="width:100%;height:100%;"></div>
+          </div>
+          <div id="geofence-form" style="display:none;margin-bottom:16px;padding:16px;background:rgba(15,23,42,0.5);border-radius:12px;border:1px solid rgba(51,65,85,0.5);">
+            <div class="replay-form-row">
+              <div class="form-group" style="flex:1;">
+                <label>Nome da Geofence</label>
+                <input type="text" id="gf-name" class="form-input" placeholder="Ex: Garagem, Cliente X...">
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Raio (metros)</label>
+                <input type="number" id="gf-radius" class="form-input" value="500" min="50" max="50000">
+              </div>
+              <div class="form-group" style="align-self:flex-end;">
+                <button class="btn-add" onclick="saveGeofence()">Salvar</button>
+                <button class="action-btn btn-toggle-off" onclick="cancelGeofence()" style="margin-left:8px;">Cancelar</button>
+              </div>
+            </div>
+            <div style="color:#94a3b8;font-size:12px;margin-top:8px;">Clique no mapa para definir o centro da geofence circular.</div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Tipo</th>
+                  <th>Descricao</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="geofences-table-body">
+                <tr><td colspan="4" style="text-align:center;color:#64748b;padding:40px;">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    </div> <!-- end admin-content -->
   </div>
 
   <!-- ======== TRACKING PAGE (Admin + Client) ======== -->
@@ -3303,6 +3589,492 @@
       } catch (err) {
         showToast('Erro ao deletar: ' + err.message, 'error');
       }
+    }
+
+    // ==================== ADMIN TABS ====================
+    function switchAdminTab(tabId) {
+      document.querySelectorAll('.admin-tab-content').forEach(function(t) {
+        t.style.display = 'none';
+        t.classList.remove('active');
+      });
+      document.querySelectorAll('.admin-tab').forEach(function(t) { t.classList.remove('active'); });
+      var tab = document.getElementById(tabId);
+      if (tab) { tab.style.display = 'block'; tab.classList.add('active'); }
+      // Highlight active tab button
+      var tabs = document.querySelectorAll('.admin-tab');
+      tabs.forEach(function(t) {
+        if (t.textContent.trim() === getTabLabel(tabId)) t.classList.add('active');
+      });
+      // Init maps if needed
+      if (tabId === 'tab-replay') initReplayTab();
+      if (tabId === 'tab-geofences') initGeofencesTab();
+      if (tabId === 'tab-reports') initReportsTab();
+    }
+    function getTabLabel(tabId) {
+      var map = { 'tab-dashboard': 'Dashboard', 'tab-replay': 'Replay de Rotas', 'tab-reports': 'Relatorios', 'tab-geofences': 'Geofences' };
+      return map[tabId] || '';
+    }
+
+    // ==================== REPLAY DE ROTAS ====================
+    var replayMap = null;
+    var replayData = [];
+    var replayMarker = null;
+    var replayTrail = null;
+    var replayTrailProgress = null;
+    var replayIndex = 0;
+    var replayPlaying = false;
+    var replayTimer = null;
+    var replaySpeedMultiplier = 5;
+
+    function initReplayTab() {
+      // Populate device select
+      populateDeviceSelect('replay-device-select');
+      // Set default dates (today)
+      var now = new Date();
+      var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+      document.getElementById('replay-from').value = toLocalISO(todayStart);
+      document.getElementById('replay-to').value = toLocalISO(now);
+      // Init map
+      if (!replayMap) {
+        setTimeout(function() {
+          replayMap = L.map('replay-map', { zoomControl: true }).setView([-6.1, -38.2], 13);
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19
+          }).addTo(replayMap);
+        }, 200);
+      } else {
+        setTimeout(function() { replayMap.invalidateSize(); }, 200);
+      }
+    }
+
+    function toLocalISO(d) {
+      var pad = function(n) { return n < 10 ? '0' + n : n; };
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    async function loadReplay() {
+      var deviceId = document.getElementById('replay-device-select').value;
+      var from = document.getElementById('replay-from').value;
+      var to = document.getElementById('replay-to').value;
+      if (!deviceId || !from || !to) { showToast('Selecione dispositivo e datas', 'error'); return; }
+
+      showToast('Carregando rota...', 'success');
+      try {
+        var fromISO = new Date(from).toISOString();
+        var toISO = new Date(to).toISOString();
+        var resp = await fetch(API_URL + '/tracking/replay/' + deviceId + '?from=' + encodeURIComponent(fromISO) + '&to=' + encodeURIComponent(toISO), {
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (!resp.ok) throw new Error('Erro ' + resp.status);
+        replayData = await resp.json();
+
+        if (replayData.length === 0) { showToast('Nenhum dado encontrado nesse periodo', 'error'); return; }
+
+        // Clear previous
+        stopReplay();
+        if (replayMarker) { replayMap.removeLayer(replayMarker); replayMarker = null; }
+        if (replayTrail) { replayMap.removeLayer(replayTrail); replayTrail = null; }
+        if (replayTrailProgress) { replayMap.removeLayer(replayTrailProgress); replayTrailProgress = null; }
+
+        // Draw full route
+        var latlngs = replayData.map(function(p) { return [p.lat, p.lng]; });
+        replayTrail = L.polyline(latlngs, { color: '#475569', weight: 3, opacity: 0.5 }).addTo(replayMap);
+        replayTrailProgress = L.polyline([], { color: '#22c55e', weight: 4, opacity: 0.9 }).addTo(replayMap);
+
+        // Fit map
+        replayMap.fitBounds(replayTrail.getBounds(), { padding: [40, 40] });
+
+        // Get device category for icon
+        var selOpt = document.getElementById('replay-device-select');
+        var cat = selOpt.options[selOpt.selectedIndex].getAttribute('data-category') || 'car';
+
+        // Place marker at start
+        replayIndex = 0;
+        var startIcon = getVehicleIcon(cat, replayData[0].speed, replayData[0].course);
+        replayMarker = L.marker([replayData[0].lat, replayData[0].lng], { icon: startIcon }).addTo(replayMap);
+
+        // Show player + stats
+        document.getElementById('replay-player').style.display = 'block';
+        document.getElementById('replay-stats').style.display = 'block';
+        updateReplayDisplay();
+
+        // Calculate stats
+        var totalDist = 0;
+        var maxSpd = 0;
+        for (var i = 1; i < replayData.length; i++) {
+          var dLat = replayData[i].lat - replayData[i-1].lat;
+          var dLng = replayData[i].lng - replayData[i-1].lng;
+          totalDist += Math.sqrt(dLat*dLat + dLng*dLng) * 111.32;
+          if (replayData[i].speed > maxSpd) maxSpd = replayData[i].speed;
+        }
+        var durMs = new Date(replayData[replayData.length-1].time) - new Date(replayData[0].time);
+        document.getElementById('rstat-points').textContent = replayData.length;
+        document.getElementById('rstat-distance').textContent = totalDist.toFixed(1) + ' km';
+        document.getElementById('rstat-maxspeed').textContent = maxSpd + ' km/h';
+        document.getElementById('rstat-duration').textContent = formatDuration(durMs);
+
+        showToast(replayData.length + ' pontos carregados!', 'success');
+      } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+      }
+    }
+
+    function updateReplayDisplay() {
+      if (!replayData.length) return;
+      var p = replayData[replayIndex];
+      document.getElementById('replay-time-display').textContent = new Date(p.time).toLocaleString('pt-BR');
+      document.getElementById('replay-speed-display').textContent = p.speed + ' km/h';
+      document.getElementById('replay-point-display').textContent = (replayIndex + 1) + '/' + replayData.length;
+      var pct = replayData.length > 1 ? (replayIndex / (replayData.length - 1)) * 100 : 0;
+      document.getElementById('replay-progress').style.width = pct + '%';
+      document.getElementById('replay-slider').value = pct;
+
+      if (replayMarker) {
+        replayMarker.setLatLng([p.lat, p.lng]);
+        var selOpt = document.getElementById('replay-device-select');
+        var cat = selOpt.options[selOpt.selectedIndex].getAttribute('data-category') || 'car';
+        replayMarker.setIcon(getVehicleIcon(cat, p.speed, p.course));
+      }
+      // Update progress trail
+      if (replayTrailProgress) {
+        var progressLatLngs = replayData.slice(0, replayIndex + 1).map(function(pt) { return [pt.lat, pt.lng]; });
+        replayTrailProgress.setLatLngs(progressLatLngs);
+      }
+    }
+
+    function toggleReplayPlay() {
+      if (replayPlaying) { stopReplay(); } else { startReplay(); }
+    }
+
+    function startReplay() {
+      if (!replayData.length) return;
+      replayPlaying = true;
+      document.getElementById('replay-play-btn').innerHTML = '&#9646;&#9646;';
+      doReplayStep();
+    }
+
+    function stopReplay() {
+      replayPlaying = false;
+      if (replayTimer) { clearTimeout(replayTimer); replayTimer = null; }
+      var btn = document.getElementById('replay-play-btn');
+      if (btn) btn.innerHTML = '&#9654;';
+    }
+
+    function doReplayStep() {
+      if (!replayPlaying || replayIndex >= replayData.length - 1) { stopReplay(); return; }
+      replayIndex++;
+      updateReplayDisplay();
+      // Calculate delay based on time difference and speed multiplier
+      var timeDiff = 200; // default
+      if (replayIndex < replayData.length - 1) {
+        var t1 = new Date(replayData[replayIndex].time).getTime();
+        var t0 = new Date(replayData[replayIndex - 1].time).getTime();
+        timeDiff = Math.max(20, Math.min(2000, (t1 - t0) / replaySpeedMultiplier));
+      }
+      replayTimer = setTimeout(doReplayStep, timeDiff);
+    }
+
+    function replayStepBack() { if (replayIndex > 0) { replayIndex--; updateReplayDisplay(); } }
+    function replayStepForward() { if (replayIndex < replayData.length - 1) { replayIndex++; updateReplayDisplay(); } }
+    function seekReplay(val) { replayIndex = Math.round((val / 100) * (replayData.length - 1)); updateReplayDisplay(); }
+    function setReplaySpeed(val) { replaySpeedMultiplier = parseInt(val); }
+
+    function formatDuration(ms) {
+      var secs = Math.floor(ms / 1000);
+      var h = Math.floor(secs / 3600);
+      var m = Math.floor((secs % 3600) / 60);
+      var s = secs % 60;
+      if (h > 0) return h + 'h ' + m + 'min';
+      if (m > 0) return m + 'min ' + s + 's';
+      return s + 's';
+    }
+
+    // ==================== RELATORIOS ====================
+    function initReportsTab() {
+      populateDeviceSelect('report-device-select');
+      var now = new Date();
+      var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0);
+      document.getElementById('report-from').value = toLocalISO(todayStart);
+      document.getElementById('report-to').value = toLocalISO(now);
+    }
+
+    async function loadReport() {
+      var deviceId = document.getElementById('report-device-select').value;
+      var from = document.getElementById('report-from').value;
+      var to = document.getElementById('report-to').value;
+      var type = document.getElementById('report-type').value;
+      if (!deviceId || !from || !to) { showToast('Selecione dispositivo e datas', 'error'); return; }
+
+      document.getElementById('report-loading').style.display = 'block';
+      document.getElementById('report-results').innerHTML = '';
+
+      try {
+        var fromISO = new Date(from).toISOString();
+        var toISO = new Date(to).toISOString();
+        var resp = await fetch(API_URL + '/tracking/reports/' + type + '/' + deviceId + '?from=' + encodeURIComponent(fromISO) + '&to=' + encodeURIComponent(toISO), {
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (!resp.ok) throw new Error('Erro ' + resp.status);
+        var data = await resp.json();
+
+        document.getElementById('report-loading').style.display = 'none';
+
+        if (data.length === 0) {
+          document.getElementById('report-results').innerHTML = '<div style="text-align:center;color:#64748b;padding:40px;">Nenhum dado encontrado nesse periodo.</div>';
+          return;
+        }
+
+        if (type === 'trips') renderTripsReport(data);
+        else if (type === 'stops') renderStopsReport(data);
+        else if (type === 'summary') renderSummaryReport(data);
+        else if (type === 'events') renderEventsReport(data);
+      } catch (err) {
+        document.getElementById('report-loading').style.display = 'none';
+        showToast('Erro: ' + err.message, 'error');
+      }
+    }
+
+    function renderTripsReport(data) {
+      var html = '<h4 style="color:#e2e8f0;margin-bottom:12px;">Viagens (' + data.length + ')</h4>' +
+        '<table class="report-table"><thead><tr><th>Inicio</th><th>Fim</th><th>De</th><th>Para</th><th>Distancia</th><th>Duracao</th><th>Vel. Media</th><th>Vel. Max</th></tr></thead><tbody>';
+      data.forEach(function(t) {
+        html += '<tr>' +
+          '<td>' + new Date(t.startTime).toLocaleString('pt-BR') + '</td>' +
+          '<td>' + new Date(t.endTime).toLocaleString('pt-BR') + '</td>' +
+          '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(t.startAddress || '-') + '</td>' +
+          '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(t.endAddress || '-') + '</td>' +
+          '<td>' + t.distance + ' km</td>' +
+          '<td>' + formatDuration(t.duration) + '</td>' +
+          '<td>' + t.averageSpeed + ' km/h</td>' +
+          '<td style="color:#ef4444;">' + t.maxSpeed + ' km/h</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('report-results').innerHTML = html;
+    }
+
+    function renderStopsReport(data) {
+      var html = '<h4 style="color:#e2e8f0;margin-bottom:12px;">Paradas (' + data.length + ')</h4>' +
+        '<table class="report-table"><thead><tr><th>Inicio</th><th>Fim</th><th>Local</th><th>Duracao</th></tr></thead><tbody>';
+      data.forEach(function(s) {
+        html += '<tr>' +
+          '<td>' + new Date(s.startTime).toLocaleString('pt-BR') + '</td>' +
+          '<td>' + new Date(s.endTime).toLocaleString('pt-BR') + '</td>' +
+          '<td>' + escapeHtml(s.address || s.latitude.toFixed(5) + ', ' + s.longitude.toFixed(5)) + '</td>' +
+          '<td>' + formatDuration(s.duration) + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('report-results').innerHTML = html;
+    }
+
+    function renderSummaryReport(data) {
+      var s = data[0] || {};
+      var html = '<h4 style="color:#e2e8f0;margin-bottom:12px;">Resumo</h4>' +
+        '<div class="stats-grid">' +
+        '<div class="stat-card"><div class="stat-label">Distancia Total</div><div class="stat-value">' + (s.distance || 0) + ' km</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Vel. Media</div><div class="stat-value">' + (s.averageSpeed || 0) + ' km/h</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Vel. Maxima</div><div class="stat-value" style="color:#ef4444;">' + (s.maxSpeed || 0) + ' km/h</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Horas Motor</div><div class="stat-value">' + formatDuration(s.engineHours || 0) + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Combustivel</div><div class="stat-value">' + (s.spentFuel || 0) + ' L</div></div>' +
+        '</div>';
+      document.getElementById('report-results').innerHTML = html;
+    }
+
+    function renderEventsReport(data) {
+      var eventLabels = {
+        deviceOnline: 'Dispositivo Online',
+        deviceOffline: 'Dispositivo Offline',
+        deviceMoving: 'Em Movimento',
+        deviceStopped: 'Parado',
+        deviceOverspeed: 'Excesso de Velocidade',
+        geofenceEnter: 'Entrou na Geofence',
+        geofenceExit: 'Saiu da Geofence',
+        ignitionOn: 'Ignicao Ligada',
+        ignitionOff: 'Ignicao Desligada',
+        alarm: 'Alarme',
+      };
+      var html = '<h4 style="color:#e2e8f0;margin-bottom:12px;">Eventos (' + data.length + ')</h4>' +
+        '<table class="report-table"><thead><tr><th>Data/Hora</th><th>Tipo</th><th>Detalhes</th></tr></thead><tbody>';
+      data.forEach(function(e) {
+        var label = eventLabels[e.type] || e.type;
+        var color = '#94a3b8';
+        if (e.type === 'deviceOverspeed' || e.type === 'alarm') color = '#ef4444';
+        if (e.type === 'deviceOnline' || e.type === 'deviceMoving') color = '#22c55e';
+        if (e.type === 'geofenceEnter' || e.type === 'geofenceExit') color = '#a78bfa';
+        html += '<tr>' +
+          '<td>' + new Date(e.eventTime).toLocaleString('pt-BR') + '</td>' +
+          '<td style="color:' + color + ';font-weight:600;">' + label + '</td>' +
+          '<td style="color:#64748b;font-size:12px;">' + JSON.stringify(e.attributes || {}) + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('report-results').innerHTML = html;
+    }
+
+    // ==================== GEOFENCES ====================
+    var geofenceMap = null;
+    var geofenceCircle = null;
+    var geofenceCenter = null;
+    var geofenceLayers = [];
+
+    function initGeofencesTab() {
+      if (!geofenceMap) {
+        setTimeout(function() {
+          geofenceMap = L.map('geofence-map', { zoomControl: true }).setView([-6.1, -38.2], 13);
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19
+          }).addTo(geofenceMap);
+          geofenceMap.on('click', function(e) {
+            if (document.getElementById('geofence-form').style.display !== 'none') {
+              setGeofenceCenter(e.latlng);
+            }
+          });
+        }, 200);
+      } else {
+        setTimeout(function() { geofenceMap.invalidateSize(); }, 200);
+      }
+      loadGeofences();
+    }
+
+    async function loadGeofences() {
+      try {
+        var resp = await fetch(API_URL + '/tracking/geofences', {
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (!resp.ok) throw new Error('Erro');
+        var geofences = await resp.json();
+
+        // Clear map layers
+        geofenceLayers.forEach(function(l) { if (geofenceMap) geofenceMap.removeLayer(l); });
+        geofenceLayers = [];
+
+        // Render table
+        var tbody = document.getElementById('geofences-table-body');
+        if (geofences.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:40px;">Nenhuma geofence cadastrada.</td></tr>';
+          return;
+        }
+
+        var html = '';
+        geofences.forEach(function(gf) {
+          var areaType = 'Desconhecido';
+          if (gf.area && gf.area.startsWith('CIRCLE')) areaType = 'Circulo';
+          else if (gf.area && gf.area.startsWith('POLYGON')) areaType = 'Poligono';
+          html += '<tr>' +
+            '<td>' + escapeHtml(gf.name) + '</td>' +
+            '<td>' + areaType + '</td>' +
+            '<td>' + escapeHtml(gf.description || '-') + '</td>' +
+            '<td><button class="action-btn btn-toggle-off" onclick="deleteGeofence(' + gf.id + ')" style="font-size:11px;">Excluir</button></td>' +
+            '</tr>';
+
+          // Draw on map
+          if (gf.area && gf.area.startsWith('CIRCLE')) {
+            var match = gf.area.match(/CIRCLE\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*,\s*([-\d.]+)\s*\)/);
+            if (match) {
+              var circle = L.circle([parseFloat(match[1]), parseFloat(match[2])], {
+                radius: parseFloat(match[3]),
+                color: '#a78bfa',
+                fillColor: '#a78bfa',
+                fillOpacity: 0.15,
+                weight: 2
+              }).addTo(geofenceMap);
+              circle.bindTooltip(gf.name, { permanent: true, direction: 'center', className: 'geofence-label' });
+              geofenceLayers.push(circle);
+            }
+          }
+        });
+        tbody.innerHTML = html;
+      } catch (err) {
+        showToast('Erro ao carregar geofences: ' + err.message, 'error');
+      }
+    }
+
+    function showNewGeofenceForm() {
+      document.getElementById('geofence-form').style.display = 'block';
+      document.getElementById('gf-name').value = '';
+      document.getElementById('gf-radius').value = '500';
+      geofenceCenter = null;
+      if (geofenceCircle) { geofenceMap.removeLayer(geofenceCircle); geofenceCircle = null; }
+      showToast('Clique no mapa para definir o centro', 'success');
+    }
+
+    function cancelGeofence() {
+      document.getElementById('geofence-form').style.display = 'none';
+      if (geofenceCircle) { geofenceMap.removeLayer(geofenceCircle); geofenceCircle = null; }
+      geofenceCenter = null;
+    }
+
+    function setGeofenceCenter(latlng) {
+      geofenceCenter = latlng;
+      var radius = parseInt(document.getElementById('gf-radius').value) || 500;
+      if (geofenceCircle) geofenceMap.removeLayer(geofenceCircle);
+      geofenceCircle = L.circle(latlng, {
+        radius: radius,
+        color: '#22c55e',
+        fillColor: '#22c55e',
+        fillOpacity: 0.2,
+        weight: 2,
+        dashArray: '5,5'
+      }).addTo(geofenceMap);
+    }
+
+    async function saveGeofence() {
+      var name = document.getElementById('gf-name').value.trim();
+      var radius = parseInt(document.getElementById('gf-radius').value) || 500;
+      if (!name) { showToast('Informe o nome da geofence', 'error'); return; }
+      if (!geofenceCenter) { showToast('Clique no mapa para definir o centro', 'error'); return; }
+
+      var area = 'CIRCLE (' + geofenceCenter.lat + ' ' + geofenceCenter.lng + ', ' + radius + ')';
+      try {
+        var resp = await fetch(API_URL + '/tracking/geofences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+          body: JSON.stringify({ name: name, area: area, description: 'Raio: ' + radius + 'm' })
+        });
+        if (!resp.ok) throw new Error('Erro ao salvar');
+        showToast('Geofence criada com sucesso!', 'success');
+        cancelGeofence();
+        loadGeofences();
+      } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+      }
+    }
+
+    async function deleteGeofence(id) {
+      if (!confirm('Excluir esta geofence?')) return;
+      try {
+        var resp = await fetch(API_URL + '/tracking/geofences/' + id, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + authToken }
+        });
+        if (!resp.ok) throw new Error('Erro');
+        showToast('Geofence excluida!', 'success');
+        loadGeofences();
+      } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+      }
+    }
+
+    // ==================== SHARED UTILS ====================
+    function populateDeviceSelect(selectId) {
+      var sel = document.getElementById(selectId);
+      if (!sel) return;
+      // Use cached devices if available
+      fetch(API_URL + '/tracking/positions', {
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      }).then(function(r) { return r.json(); }).then(function(vehicles) {
+        var currentVal = sel.value;
+        sel.innerHTML = '<option value="">Selecione o dispositivo...</option>';
+        vehicles.forEach(function(v) {
+          var opt = document.createElement('option');
+          opt.value = v.deviceId;
+          opt.textContent = v.name + ' (' + (v.uniqueId || v.deviceId) + ')';
+          opt.setAttribute('data-category', v.category || 'car');
+          sel.appendChild(opt);
+        });
+        if (currentVal) sel.value = currentVal;
+      }).catch(function() {});
     }
 
     // ==================== INIT ====================
