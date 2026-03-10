@@ -1109,6 +1109,90 @@
     .report-table th { text-align: left; font-size: 12px; }
     .report-table td { font-size: 13px; }
 
+    /* Fullscreen tracking mode */
+    .tracking-fullscreen .tracking-header { display: none !important; }
+    .tracking-fullscreen .tracking-sidebar { display: none !important; }
+    .tracking-fullscreen .tracking-body { padding: 0 !important; }
+    .tracking-fullscreen .tracking-map-container { width: 100vw !important; }
+    .tracking-fullscreen .tracking-map-wrap { height: 100vh !important; }
+    .tracking-fullscreen #tracking-map { height: 100vh !important; }
+
+    /* Fullscreen overlay */
+    .fullscreen-overlay {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 14px 28px;
+      text-align: center;
+      border: 1px solid rgba(51,65,85,0.5);
+      min-width: 320px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .fs-vehicle-name {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .fs-speed {
+      color: #22c55e;
+      font-size: 42px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .fs-speed small { font-size: 16px; font-weight: 400; color: #94a3b8; }
+    .fs-address {
+      color: #e2e8f0;
+      font-size: 13px;
+      margin-top: 6px;
+      max-width: 400px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fs-exit-btn {
+      margin-top: 10px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #ef4444;
+      padding: 4px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .fs-exit-btn:hover { background: rgba(239,68,68,0.25); }
+
+    /* Video export progress */
+    .export-progress {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%,-50%);
+      z-index: 2000;
+      background: rgba(15,23,42,0.95);
+      padding: 30px 40px;
+      border-radius: 16px;
+      text-align: center;
+      border: 1px solid rgba(51,65,85,0.5);
+    }
+    .export-progress-bar {
+      width: 250px;
+      height: 8px;
+      background: rgba(51,65,85,0.5);
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+    .export-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #a78bfa, #7c3aed);
+      border-radius: 4px;
+      transition: width 0.2s;
+    }
+
     /* Loading spinner */
     .spinner {
       display: inline-block;
@@ -2020,6 +2104,7 @@
                   <option value="25">25x</option>
                   <option value="50">50x</option>
                 </select>
+                <button class="replay-btn" id="replay-export-btn" onclick="exportReplayVideo()" title="Exportar video" style="background:rgba(139,92,246,0.2);border-color:rgba(139,92,246,0.4);color:#a78bfa;">Exportar Video</button>
               </div>
             </div>
           </div>
@@ -2137,7 +2222,8 @@
       <div style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="tracking-user-name"></span>
         <button class="btn-back-admin" id="btn-back-admin" onclick="goBackFromTracking()" style="display:none;">Voltar ao Painel</button>
-        <button class="btn-back-admin" onclick="openTraccarDirect()">Abrir Traccar</button>
+        <button class="btn-back-admin" onclick="toggleTrackingFullscreen()" id="btn-fullscreen" style="color:#a78bfa;border-color:rgba(139,92,246,0.3);">Tela Cheia</button>
+        <button class="btn-back-admin admin-only-btn" onclick="openTraccarDirect()">Abrir Traccar</button>
         <button class="btn-back-admin" onclick="logout()" style="color:#ef4444;border-color:rgba(239,68,68,0.3);">Sair</button>
       </div>
     </div>
@@ -2157,6 +2243,13 @@
         <!-- Main Map -->
         <div class="tracking-map-wrap">
           <div id="tracking-map"></div>
+          <!-- Fullscreen vehicle info overlay -->
+          <div id="fullscreen-overlay" class="fullscreen-overlay" style="display:none;">
+            <div class="fs-vehicle-name" id="fs-vehicle-name">--</div>
+            <div class="fs-speed" id="fs-speed">0 <small>km/h</small></div>
+            <div class="fs-address" id="fs-address">Aguardando...</div>
+            <button class="fs-exit-btn" onclick="toggleTrackingFullscreen()">Sair da Tela Cheia</button>
+          </div>
           <div class="tracking-stats-bar">
             <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="stat-moving">0</span> em movimento</div>
             <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="stat-stopped">0</span> parados</div>
@@ -3779,6 +3872,153 @@
     function seekReplay(val) { replayIndex = Math.round((val / 100) * (replayData.length - 1)); updateReplayDisplay(); }
     function setReplaySpeed(val) { replaySpeedMultiplier = parseInt(val); }
 
+    // ====== VIDEO EXPORT (WebM via Canvas + MediaRecorder) ======
+    async function exportReplayVideo() {
+      if (!replayData || replayData.length < 2) { showToast('Carregue uma rota primeiro', 'error'); return; }
+
+      var mapContainer = document.getElementById('replay-map');
+      var mapRect = mapContainer.getBoundingClientRect();
+      var w = Math.round(mapRect.width);
+      var h = Math.round(mapRect.height);
+
+      // Create progress UI
+      var progDiv = document.createElement('div');
+      progDiv.className = 'export-progress';
+      progDiv.innerHTML = '<div style="color:#e2e8f0;font-size:16px;font-weight:600;">Exportando Video...</div>' +
+        '<div style="color:#94a3b8;font-size:12px;margin-top:4px;" id="export-status">Preparando...</div>' +
+        '<div class="export-progress-bar"><div class="export-progress-fill" id="export-pbar" style="width:0%"></div></div>' +
+        '<button onclick="cancelVideoExport()" style="margin-top:12px;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 14px;border-radius:8px;cursor:pointer;font-size:11px;">Cancelar</button>';
+      document.getElementById('replay-map-container').appendChild(progDiv);
+
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+
+      // Use html2canvas-like approach: capture map tiles via drawImage
+      var stream = canvas.captureStream(30);
+      var recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 4000000 });
+      var chunks = [];
+      window._exportCancelled = false;
+
+      recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = function() {
+        progDiv.remove();
+        if (window._exportCancelled) return;
+        var blob = new Blob(chunks, { type: 'video/webm' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        var devName = document.getElementById('replay-device-select');
+        var name = devName.options[devName.selectedIndex].textContent || 'replay';
+        a.href = url;
+        a.download = 'replay-' + name.replace(/[^a-zA-Z0-9]/g,'_') + '.webm';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Video exportado! (formato WebM)', 'success');
+      };
+
+      recorder.start();
+      document.getElementById('export-status').textContent = 'Gravando frames...';
+
+      // Replay through all points at fixed speed, capturing each frame
+      var selOpt = document.getElementById('replay-device-select');
+      var cat = selOpt.options[selOpt.selectedIndex].getAttribute('data-category') || 'car';
+      var totalPoints = replayData.length;
+      var step = Math.max(1, Math.floor(totalPoints / 600)); // max ~600 frames for reasonable file size
+
+      for (var i = 0; i < totalPoints && !window._exportCancelled; i += step) {
+        replayIndex = i;
+        updateReplayDisplay();
+        replayMap.panTo([replayData[i].lat, replayData[i].lng], { animate: false });
+
+        // Wait for map tiles to render
+        await new Promise(function(r) { setTimeout(r, 80); });
+
+        // Capture current map state to canvas using html2canvas approach
+        try {
+          await captureMapToCanvas(ctx, mapContainer, w, h, replayData[i], cat);
+        } catch(e) { /* skip frame */ }
+
+        // Hold frame for 2 extra frames at 30fps for smooth video
+        await new Promise(function(r) { setTimeout(r, 66); });
+
+        var pct = Math.round((i / totalPoints) * 100);
+        document.getElementById('export-pbar').style.width = pct + '%';
+        document.getElementById('export-status').textContent = 'Frame ' + Math.round(i/step) + '/' + Math.round(totalPoints/step) + ' (' + pct + '%)';
+      }
+
+      if (!window._exportCancelled) {
+        // Show final position
+        replayIndex = totalPoints - 1;
+        updateReplayDisplay();
+        await new Promise(function(r) { setTimeout(r, 200); });
+        recorder.stop();
+      }
+    }
+
+    function cancelVideoExport() {
+      window._exportCancelled = true;
+      var prog = document.querySelector('.export-progress');
+      if (prog) prog.remove();
+      showToast('Exportacao cancelada', 'error');
+    }
+
+    async function captureMapToCanvas(ctx, container, w, h, point, category) {
+      // Draw map background from tile images
+      var tiles = container.querySelectorAll('.leaflet-tile-pane img');
+      var pane = container.querySelector('.leaflet-map-pane');
+      var paneTransform = pane ? getComputedStyle(pane).transform : 'none';
+      var paneOffset = { x: 0, y: 0 };
+      if (paneTransform && paneTransform !== 'none') {
+        var m = paneTransform.match(/matrix.*\((.+)\)/);
+        if (m) {
+          var vals = m[1].split(',').map(Number);
+          paneOffset.x = vals[4] || 0;
+          paneOffset.y = vals[5] || 0;
+        }
+      }
+
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, w, h);
+
+      tiles.forEach(function(img) {
+        if (!img.complete || img.naturalWidth === 0) return;
+        var tilePane = img.closest('.leaflet-tile-pane');
+        var tileContainer = img.parentElement;
+        var tcTransform = tileContainer ? getComputedStyle(tileContainer).transform : 'none';
+        var tcOffset = { x: 0, y: 0 };
+        if (tcTransform && tcTransform !== 'none') {
+          var m2 = tcTransform.match(/matrix.*\((.+)\)/);
+          if (m2) {
+            var v2 = m2[1].split(',').map(Number);
+            tcOffset.x = v2[4] || 0;
+            tcOffset.y = v2[5] || 0;
+          }
+        }
+        var left = parseInt(img.style.left || 0) + parseInt(img.style.marginLeft || 0);
+        var top = parseInt(img.style.top || 0) + parseInt(img.style.marginTop || 0);
+        var imgW = img.width || img.naturalWidth;
+        var imgH = img.height || img.naturalHeight;
+        var x = left + paneOffset.x + tcOffset.x;
+        var y = top + paneOffset.y + tcOffset.y;
+        try { ctx.drawImage(img, x, y, imgW, imgH); } catch(e) {}
+      });
+
+      // Draw route trail
+      var overlay = container.querySelectorAll('.leaflet-overlay-pane path, .leaflet-overlay-pane svg');
+      // Simplified: draw info overlay
+      ctx.fillStyle = 'rgba(15,23,42,0.8)';
+      ctx.fillRect(0, h - 50, w, 50);
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(new Date(point.time).toLocaleString('pt-BR') + '   |   ' + point.speed + ' km/h', 16, h - 20);
+
+      // Draw HSQ watermark
+      ctx.fillStyle = 'rgba(148,163,184,0.4)';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('HSQ Rastreamento', w - 130, h - 56);
+    }
+
     function formatDuration(ms) {
       var secs = Math.floor(ms / 1000);
       var h = Math.floor(secs / 3600);
@@ -3855,17 +4095,33 @@
 
     function renderStopsReport(data) {
       var html = '<h4 style="color:#e2e8f0;margin-bottom:12px;">Paradas (' + data.length + ')</h4>' +
-        '<table class="report-table"><thead><tr><th>Inicio</th><th>Fim</th><th>Local</th><th>Duracao</th></tr></thead><tbody>';
-      data.forEach(function(s) {
+        '<table class="report-table"><thead><tr><th>Inicio</th><th>Fim</th><th>Duracao</th><th>Endereco</th><th>Ver Local</th></tr></thead><tbody>';
+      data.forEach(function(s, idx) {
+        var coords = s.latitude.toFixed(5) + ', ' + s.longitude.toFixed(5);
+        var svUrl = 'https://www.google.com/maps?layer=c&cbll=' + s.latitude + ',' + s.longitude;
+        var mapsUrl = 'https://www.google.com/maps?q=' + s.latitude + ',' + s.longitude + '&z=17';
         html += '<tr>' +
           '<td>' + new Date(s.startTime).toLocaleString('pt-BR') + '</td>' +
           '<td>' + new Date(s.endTime).toLocaleString('pt-BR') + '</td>' +
-          '<td>' + escapeHtml(s.address || s.latitude.toFixed(5) + ', ' + s.longitude.toFixed(5)) + '</td>' +
-          '<td>' + formatDuration(s.duration) + '</td>' +
+          '<td style="font-weight:600;">' + formatDuration(s.duration) + '</td>' +
+          '<td><span id="stop-addr-' + idx + '" style="color:#94a3b8;font-size:12px;">' + escapeHtml(s.address || coords) + '</span></td>' +
+          '<td style="white-space:nowrap;">' +
+            '<a href="' + mapsUrl + '" target="_blank" style="color:#3b82f6;text-decoration:none;font-size:12px;margin-right:8px;" title="Ver no Google Maps">Maps</a>' +
+            '<a href="' + svUrl + '" target="_blank" style="color:#22c55e;text-decoration:none;font-size:12px;" title="Ver no Street View">Street View</a>' +
+          '</td>' +
           '</tr>';
       });
       html += '</tbody></table>';
       document.getElementById('report-results').innerHTML = html;
+      // Geocode addresses that are just coordinates
+      data.forEach(function(s, idx) {
+        if (!s.address || s.address.length < 5) {
+          reverseGeocode(s.latitude, s.longitude, function(addr) {
+            var el = document.getElementById('stop-addr-' + idx);
+            if (el) { el.textContent = addr; el.style.color = '#e2e8f0'; }
+          });
+        }
+      });
     }
 
     function renderSummaryReport(data) {
@@ -4053,6 +4309,64 @@
         loadGeofences();
       } catch (err) {
         showToast('Erro: ' + err.message, 'error');
+      }
+    }
+
+    // ==================== FULLSCREEN TRACKING ====================
+    var isTrackingFullscreen = false;
+
+    function toggleTrackingFullscreen() {
+      isTrackingFullscreen = !isTrackingFullscreen;
+      var page = document.getElementById('page-tracking');
+      var overlay = document.getElementById('fullscreen-overlay');
+      var btn = document.getElementById('btn-fullscreen');
+
+      if (isTrackingFullscreen) {
+        page.classList.add('tracking-fullscreen');
+        overlay.style.display = 'block';
+        btn.textContent = 'Sair Tela Cheia';
+        // Request browser fullscreen
+        if (page.requestFullscreen) page.requestFullscreen();
+        else if (page.webkitRequestFullscreen) page.webkitRequestFullscreen();
+      } else {
+        page.classList.remove('tracking-fullscreen');
+        overlay.style.display = 'none';
+        btn.textContent = 'Tela Cheia';
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+      // Resize map
+      setTimeout(function() { if (trackingMap) trackingMap.invalidateSize(); }, 300);
+    }
+
+    // Listen for ESC to exit fullscreen
+    document.addEventListener('fullscreenchange', function() {
+      if (!document.fullscreenElement && isTrackingFullscreen) {
+        isTrackingFullscreen = false;
+        document.getElementById('page-tracking').classList.remove('tracking-fullscreen');
+        document.getElementById('fullscreen-overlay').style.display = 'none';
+        document.getElementById('btn-fullscreen').textContent = 'Tela Cheia';
+        setTimeout(function() { if (trackingMap) trackingMap.invalidateSize(); }, 300);
+      }
+    });
+
+    // Update fullscreen overlay with selected vehicle info
+    function updateFullscreenOverlay(vehicle) {
+      if (!isTrackingFullscreen || !vehicle) return;
+      var pos = vehicle.position;
+      document.getElementById('fs-vehicle-name').textContent = vehicle.name + ' (' + (vehicle.category || 'car') + ')';
+      var speedEl = document.getElementById('fs-speed');
+      var speed = pos ? pos.speed : 0;
+      speedEl.innerHTML = speed + ' <small>km/h</small>';
+      speedEl.style.color = speed > 2 ? '#22c55e' : '#ef4444';
+      var addrEl = document.getElementById('fs-address');
+      if (pos && pos.address && pos.address.length > 5) {
+        addrEl.textContent = pos.address;
+      } else if (pos && pos.latitude) {
+        addrEl.textContent = 'Buscando endereco...';
+        reverseGeocode(pos.latitude, pos.longitude, function(addr) {
+          addrEl.textContent = addr;
+        });
       }
     }
 
@@ -4346,10 +4660,15 @@
     function showTrackingPage() {
       showPage('page-tracking');
       document.getElementById('tracking-user-name').textContent = currentUser ? currentUser.name : '';
+      var isAdmin = currentUser && currentUser.role === 'admin';
       var backBtn = document.getElementById('btn-back-admin');
       if (backBtn) {
-        backBtn.style.display = (currentUser && currentUser.role === 'admin') ? 'inline-block' : 'none';
+        backBtn.style.display = isAdmin ? 'inline-block' : 'none';
       }
+      // Hide "Abrir Traccar" for non-admin
+      document.querySelectorAll('.admin-only-btn').forEach(function(b) {
+        b.style.display = isAdmin ? 'inline-block' : 'none';
+      });
       // Wait for DOM to be fully visible before initializing map
       setTimeout(function() {
         console.log('[HSQ] showTrackingPage: loading positions...');
@@ -4711,6 +5030,13 @@
         geocodeAllVehicles(vehicles);
         renderVehicleList(vehicles);
         updateTrackingStats(vehicles);
+        // Update fullscreen overlay if active
+        if (isTrackingFullscreen && selectedVehicleId) {
+          var selV = vehicles.find(function(x) { return x.deviceId == selectedVehicleId; });
+          if (selV) updateFullscreenOverlay(selV);
+        } else if (isTrackingFullscreen && vehicles.length === 1) {
+          updateFullscreenOverlay(vehicles[0]);
+        }
         if (mapReady && trackingMap) {
           try {
             updateMapMarkers(vehicles);
