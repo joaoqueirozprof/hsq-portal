@@ -4328,6 +4328,19 @@
         // Request browser fullscreen
         if (page.requestFullscreen) page.requestFullscreen();
         else if (page.webkitRequestFullscreen) page.webkitRequestFullscreen();
+        // Immediately populate overlay with current vehicle data
+        if (allVehicleData && allVehicleData.length > 0) {
+          var v = null;
+          if (selectedVehicleId) {
+            v = allVehicleData.find(function(x) { return x.deviceId == selectedVehicleId; });
+          }
+          if (!v && allVehicleData.length === 1) {
+            v = allVehicleData[0];
+            selectedVehicleId = v.deviceId;
+          }
+          if (!v) { v = allVehicleData[0]; selectedVehicleId = v.deviceId; }
+          if (v) updateFullscreenOverlay(v);
+        }
       } else {
         page.classList.remove('tracking-fullscreen');
         overlay.style.display = 'none';
@@ -4356,17 +4369,20 @@
       var pos = vehicle.position;
       document.getElementById('fs-vehicle-name').textContent = vehicle.name + ' (' + (vehicle.category || 'car') + ')';
       var speedEl = document.getElementById('fs-speed');
-      var speed = pos ? pos.speed : 0;
+      var speed = pos ? Math.round(pos.speed || 0) : 0;
       speedEl.innerHTML = speed + ' <small>km/h</small>';
       speedEl.style.color = speed > 2 ? '#22c55e' : '#ef4444';
       var addrEl = document.getElementById('fs-address');
+      // Try geocoded address from vehicle data first (set by geocodeAllVehicles)
       if (pos && pos.address && pos.address.length > 5) {
         addrEl.textContent = pos.address;
-      } else if (pos && pos.latitude) {
+      } else if (pos && pos.latitude && pos.latitude !== 0) {
         addrEl.textContent = 'Buscando endereco...';
         reverseGeocode(pos.latitude, pos.longitude, function(addr) {
-          addrEl.textContent = addr;
+          if (isTrackingFullscreen) addrEl.textContent = addr;
         });
+      } else {
+        addrEl.textContent = 'Sem sinal GPS';
       }
     }
 
@@ -5031,11 +5047,16 @@
         renderVehicleList(vehicles);
         updateTrackingStats(vehicles);
         // Update fullscreen overlay if active
-        if (isTrackingFullscreen && selectedVehicleId) {
-          var selV = vehicles.find(function(x) { return x.deviceId == selectedVehicleId; });
-          if (selV) updateFullscreenOverlay(selV);
-        } else if (isTrackingFullscreen && vehicles.length === 1) {
-          updateFullscreenOverlay(vehicles[0]);
+        if (isTrackingFullscreen && vehicles.length > 0) {
+          var selV = null;
+          if (selectedVehicleId) {
+            selV = vehicles.find(function(x) { return x.deviceId == selectedVehicleId; });
+          }
+          if (!selV) {
+            selV = vehicles[0];
+            selectedVehicleId = selV.deviceId;
+          }
+          updateFullscreenOverlay(selV);
         }
         if (mapReady && trackingMap) {
           try {
