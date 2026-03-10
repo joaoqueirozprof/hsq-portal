@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
 
 async function seed() {
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://hsq_admin:HsqSecure2026@hsq-db:5432/hsq_portal',
+    connectionString: process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/hsq_portal',
   });
 
   try {
@@ -68,14 +68,17 @@ async function seed() {
     console.log('Schema OK');
 
     // Check if admin exists
-    const existing = await pool.query("SELECT id FROM admin_users WHERE email = 'admin@hsqrastreamento.com'");
+    const adminEmail = process.env.ADMIN_SEED_EMAIL || 'admin@hsqrastreamento.com';
+    const adminPassword = process.env.ADMIN_SEED_PASSWORD || 'change-this-admin-password';
+
+    const existing = await pool.query("SELECT id FROM admin_users WHERE email = $1", [adminEmail]);
     if (existing.rows.length === 0) {
-      const hash = await bcrypt.hash('HSQ@2026Admin!', 10);
+      const hash = await bcrypt.hash(adminPassword, 10);
       await pool.query(
         "INSERT INTO admin_users (email, password_hash, name) VALUES ($1, $2, $3)",
-        ['admin@hsqrastreamento.com', hash, 'HSQ Admin']
+        [adminEmail, hash, 'HSQ Admin']
       );
-      console.log('Admin user created: admin@hsqrastreamento.com');
+      console.log(`Admin user created: ${adminEmail}`);
     } else {
       console.log('Admin user already exists');
     }

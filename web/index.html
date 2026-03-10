@@ -2857,6 +2857,12 @@
     async function openTraccarAdmin() {
       const traccarUrl = 'https://traccar.hsqrastreamento.com.br';
       try {
+        const adminPassword = window.prompt('Informe a senha do admin do Traccar para abrir a sessao:');
+        if (!adminPassword) {
+          window.open(traccarUrl, '_blank');
+          return;
+        }
+
         // Delete any existing Traccar session first
         try {
           await fetch(traccarUrl + '/api/session', {
@@ -2867,7 +2873,7 @@
 
         const params = new URLSearchParams();
         params.append('email', 'admin@hsqrastreamento.com');
-        params.append('password', 'HSQ@2026Admin!');
+        params.append('password', adminPassword);
         const resp = await fetch(traccarUrl + '/api/session', {
           method: 'POST',
           body: params,

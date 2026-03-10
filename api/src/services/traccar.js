@@ -8,9 +8,16 @@ class TraccarService {
 
   // Admin login to Traccar API
   async adminLogin() {
+    const adminEmail = process.env.TRACCAR_ADMIN_EMAIL;
+    const adminPassword = process.env.TRACCAR_ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      throw new Error('TRACCAR_ADMIN_EMAIL and TRACCAR_ADMIN_PASSWORD must be configured');
+    }
+
     const params = new URLSearchParams();
-    params.append('email', process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com');
-    params.append('password', process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!');
+    params.append('email', adminEmail);
+    params.append('password', adminPassword);
 
     const resp = await axios.post(`${this.baseUrl}/api/session`, params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

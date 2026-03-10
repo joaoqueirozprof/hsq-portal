@@ -17,13 +17,13 @@ app.set("trust proxy", 1);
 
 // Database pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://hsq_admin:HsqSecure2026@hsq-db:5432/hsq_portal',
+  connectionString: process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/hsq_portal',
 });
 
 // Make pool available to routes
 app.locals.db = pool;
 app.locals.traccarUrl = process.env.TRACCAR_URL || 'http://72.61.129.78:8082';
-app.locals.jwtSecret = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
+app.locals.jwtSecret = process.env.JWT_SECRET || 'change-this-jwt-secret';
 
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
