@@ -80,18 +80,8 @@ async function seed() {
       console.log('Admin user already exists');
     }
 
-    // Also create Oeste Frios as first client if not exists
-    const oesteFrios = await pool.query("SELECT id FROM clients WHERE document = '00.000.000/0001-00'");
-    if (oesteFrios.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO clients (document, document_type, name, trade_name, phone, city, state, traccar_user_id, is_first_login, must_change_password, onboarding_completed)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         ON CONFLICT (document) DO NOTHING`,
-        ['00.000.000/0001-00', 'CNPJ', 'Oeste Frios Atacado e Varejo', 'Oeste Frios', '(84) 99999-0000',
-         'Pau dos Ferros', 'RN', 2, false, false, true]
-      );
-      console.log('Oeste Frios client seeded');
-    }
+    // Clean up legacy demo client if it exists
+    await pool.query("DELETE FROM clients WHERE document = '00.000.000/0001-00'").catch(() => {});
   } catch (err) {
     console.error('Seed error:', err.message);
   } finally {
