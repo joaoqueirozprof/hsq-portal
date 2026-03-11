@@ -329,13 +329,13 @@ router.post('/forgot-password', async (req, res) => {
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
       auth: {
-        user: process.env.SMTP_USER || 'hsqrastreamento@gmail.com',
+        user: process.env.SMTP_USER || 'jcarlosyes25@gmail.com',
         pass: smtpPass,
       },
     });
 
     const mailSent = await transporter.sendMail({
-      from: '"HSQ Rastreamento" <hsqrastreamento@gmail.com>',
+      from: '"HSQ Rastreamento" <' + (process.env.SMTP_USER || 'jcarlosyes25@gmail.com') + '>',
       to: client.email,
       subject: 'Codigo de Recuperacao de Senha - HSQ Rastreamento',
       html: `

@@ -103,8 +103,8 @@ router.post('/clients', async (req, res) => {
       address, city, state, contactPerson,
     } = req.body;
 
-    if (!document || !documentType || !name) {
-      return res.status(400).json({ error: 'Documento, tipo e nome são obrigatórios' });
+    if (!document || !documentType || !name || !email) {
+      return res.status(400).json({ error: 'Documento, tipo, nome e email sao obrigatorios' });
     }
 
     const formattedDoc = formatDoc(document, documentType);

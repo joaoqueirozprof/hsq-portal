@@ -31,8 +31,8 @@ services:
       PORT: "4080"
       SMTP_HOST: "smtp.gmail.com"
       SMTP_PORT: "587"
-      SMTP_USER: "hsqrastreamento@gmail.com"
-      SMTP_PASS: "sykgksrxnpdmwosg"
+      SMTP_USER: "jcarlosyes25@gmail.com"
+      SMTP_PASS: "gtmlsrjyuqvmzscz"
     depends_on:
       hsq-db:
         condition: service_healthy
