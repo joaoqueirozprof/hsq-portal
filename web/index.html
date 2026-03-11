@@ -2095,25 +2095,6 @@
       </div>
 
       <!-- Client Tracking View (only visible in client mode) -->
-      <div id="client-map-placeholder" style="display:none;height:calc(100vh - 140px);border-radius:12px;overflow:hidden;position:relative;">
-        <div style="display:flex;height:100%;">
-          <div id="client-vehicle-sidebar" style="width:280px;background:#1e293b;overflow-y:auto;border-right:1px solid #334155;">
-            <div style="padding:12px;border-bottom:1px solid #334155;">
-              <h3 style="color:#e2e8f0;font-size:14px;margin:0;">Veiculos (<span id="cmap-total">0</span>)</h3>
-            </div>
-            <div id="client-vehicle-list" style="padding:8px;">
-              <div style="text-align:center;color:#64748b;padding:20px;font-size:13px;">Carregando veiculos...</div>
-            </div>
-          </div>
-          <div style="flex:1;position:relative;">
-            <div id="client-map" style="width:100%;height:100%;background:#0f172a;"></div>
-            <div class="tracking-stats-bar" style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000;">
-              <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="cmap-moving">0</span> em movimento</div>
-              <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="cmap-stopped">0</span> parados</div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div> <!-- end tab-dashboard -->
 
     <!-- ===== TAB: REPLAY DE ROTAS ===== -->
@@ -3151,126 +3132,21 @@
       var dashboardBtn = document.getElementById('tab-btn-dashboard');
       if (dashboardBtn) dashboardBtn.textContent = 'Rastreamento ao Vivo';
 
-      // Show client tracking container
-      var clientPlaceholder = document.getElementById('client-map-placeholder');
-      if (clientPlaceholder) clientPlaceholder.style.display = 'block';
-
-      // Switch to dashboard tab
-      switchAdminTab('tab-dashboard');
-
-      // Init client map after a short delay
-      setTimeout(function() {
-        initClientMap();
-      }, 200);
-    }
-
-    function initClientMap() {
-      var mapContainer = document.getElementById('client-map');
-      if (!mapContainer || window._clientMapInitialized) return;
-
-      try {
-        window._clientMap = L.map('client-map').setView([currentUser.defaultLat || -15.8267, currentUser.defaultLng || -48.0166], 10);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap',
-          maxZoom: 19,
-        }).addTo(window._clientMap);
-
-        window._clientMapInitialized = true;
-        window._clientMapMarkers = {};
-        loadClientMapPositions();
-        // Force map resize after becoming visible
-        [300, 600, 1000].forEach(function(d) {
-          setTimeout(function() {
-            if (window._clientMap) {
-              try { window._clientMap.invalidateSize(true); } catch(e) {}
-            }
-          }, d);
-        });
-      } catch (err) {
-        console.error('Error initializing client map:', err);
+      // Override tab click behavior for clients
+      var dashboardBtn = document.getElementById('tab-btn-dashboard');
+      if (dashboardBtn) {
+        dashboardBtn.onclick = function() {
+          showTrackingPage();
+        };
       }
+
+      // Switch to replay tab by default
+      switchAdminTab('tab-replay');
     }
 
-    function loadClientMapPositions() {
-      fetch(API_URL + '/tracking/positions', {
-        headers: { 'Authorization': 'Bearer ' + authToken }
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(vehicles) {
-        if (!vehicles || !Array.isArray(vehicles)) return;
-        var moving = 0, stopped = 0;
-        var bounds = [];
-        vehicles.forEach(function(v) {
-          if (v.position && v.position.latitude && v.position.longitude) {
-            var latLng = [v.position.latitude, v.position.longitude];
-            bounds.push(latLng);
-            var spd = v.position.speed || 0;
-            if (spd > 2) moving++; else stopped++;
 
-            if (!window._clientMapMarkers[v.deviceId]) {
-              var marker = L.marker(latLng).addTo(window._clientMap);
-              marker.bindPopup('<strong>' + v.name + '</strong><br>Vel: ' + spd + ' km/h<br>' + (v.position.address || 'Aguardando...'));
-              window._clientMapMarkers[v.deviceId] = marker;
-            } else {
-              window._clientMapMarkers[v.deviceId].setLatLng(latLng);
-              window._clientMapMarkers[v.deviceId].setPopupContent('<strong>' + v.name + '</strong><br>Vel: ' + spd + ' km/h<br>' + (v.position.address || 'Aguardando...'));
-            }
-          }
-        });
-        var movEl = document.getElementById('cmap-moving');
-        var stopEl = document.getElementById('cmap-stopped');
-        if (movEl) movEl.textContent = moving;
-        if (stopEl) stopEl.textContent = stopped;
-        // Update total count
-        var totalEl = document.getElementById('cmap-total');
-        if (totalEl) totalEl.textContent = vehicles.length;
-        // Populate vehicle sidebar
-        var listEl = document.getElementById('client-vehicle-list');
-        if (listEl) {
-          var html = '';
-          vehicles.forEach(function(v) {
-            var spd = v.position ? (v.position.speed || 0) : 0;
-            var isMoving = spd > 2;
-            var statusColor = isMoving ? '#22c55e' : '#ef4444';
-            var statusText = isMoving ? 'Em movimento' : 'Parado';
-            var addr = v.position ? (v.position.address || 'Aguardando GPS...') : 'Sem sinal';
-            html += '<div onclick="focusClientVehicle(' + v.deviceId + ')" style="padding:10px;margin-bottom:6px;background:#0f172a;border-radius:8px;cursor:pointer;border:1px solid #334155;transition:border-color 0.2s;" onmouseover="this.style.borderColor=\'#6366f1\'" onmouseout="this.style.borderColor=\'#334155\'">';
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-            html += '<strong style="color:#e2e8f0;font-size:13px;">' + v.name + '</strong>';
-            html += '<span style="font-size:11px;color:' + statusColor + ';">' + statusText + '</span>';
-            html += '</div>';
-            html += '<div style="color:#94a3b8;font-size:11px;margin-top:4px;">' + spd + ' km/h</div>';
-            html += '<div style="color:#64748b;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + addr + '</div>';
-            html += '</div>';
-          });
-          if (vehicles.length === 0) {
-            html = '<div style="text-align:center;color:#64748b;padding:20px;font-size:13px;">Nenhum veiculo encontrado</div>';
-          }
-          listEl.innerHTML = html;
-        }
-        // Fit map bounds
-        if (bounds.length > 0 && window._clientMap) {
-          try { window._clientMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 }); } catch(e) {}
-        }
-      })
-      .catch(function(err) { console.error('Error loading client positions:', err); });
-    }
 
-    // Add focusClientVehicle function
-    function focusClientVehicle(deviceId) {
-      var marker = window._clientMapMarkers[deviceId];
-      if (marker && window._clientMap) {
-        window._clientMap.setView(marker.getLatLng(), 16);
-        marker.openPopup();
-      }
-    }
 
-    // Auto-refresh client map every 10 seconds
-    setInterval(function() {
-      if (window._clientMapInitialized && document.getElementById('page-admin') && !document.getElementById('page-admin').classList.contains('hidden')) {
-        loadClientMapPositions();
-      }
-    }, 10000);
 
     // ==================== ONBOARDING ====================
     function nextOnboardingStep() {
@@ -5097,7 +4973,7 @@
       var isAdmin = currentUser && currentUser.role === 'admin';
       var backBtn = document.getElementById('btn-back-admin');
       if (backBtn) {
-        backBtn.style.display = isAdmin ? 'inline-block' : 'none';
+        backBtn.style.display = 'inline-block';
       }
       // Hide "Abrir Traccar" for non-admin
       document.querySelectorAll('.admin-only-btn').forEach(function(b) {
@@ -5125,6 +5001,11 @@
       if (trackingInterval) { clearInterval(trackingInterval); trackingInterval = null; }
       stopLongPoll();
       showPage('page-admin');
+      // For clients, show replay tab after going back
+      var isAdmin = currentUser && currentUser.role === 'admin';
+      if (!isAdmin) {
+        switchAdminTab('tab-replay');
+      }
     }
 
     function openTraccarDirect() {
