@@ -262,5 +262,55 @@ router.post('/heartbeat', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/auth/forgot-password - Reset password to document number
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { document } = req.body;
+    if (!document) {
+      return res.status(400).json({ error: 'Documento é obrigatório' });
+    }
+
+    const db = req.app.locals.db;
+    const cleanDocument = cleanDoc(document);
+
+    // Find client by document
+    const result = await db.query(
+      "SELECT * FROM clients WHERE REPLACE(REPLACE(REPLACE(document, '.', ''), '-', ''), '/', '') = $1",
+      [cleanDocument]
+    );
+
+    if (result.rows.length === 0) {
+      // Don't reveal if document exists or not - still return success
+      return res.json({ message: 'Se o documento estiver cadastrado, a senha será resetada para o número do documento.' });
+    }
+
+    const client = result.rows[0];
+
+    if (!client.traccar_user_id) {
+      return res.json({ message: 'Se o documento estiver cadastrado, a senha será resetada para o número do documento.' });
+    }
+
+    // Reset password in Traccar to the document number
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    await traccar.updatePassword(client.traccar_user_id, cleanDocument);
+
+    // Mark as must change password
+    await db.query(
+      'UPDATE clients SET must_change_password = true, is_first_login = true, updated_at = NOW() WHERE id = $1',
+      [client.id]
+    );
+
+    await db.query(
+      'INSERT INTO audit_log (user_type, user_id, action, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
+      ['client', client.id, 'password_self_reset', JSON.stringify({ method: 'forgot_password' }), req.ip]
+    );
+
+    res.json({ message: 'Senha resetada com sucesso! Use seu CPF/CNPJ como senha para fazer login.' });
+  } catch (err) {
+    console.error('Forgot password error:', err.message);
+    res.status(500).json({ error: 'Erro ao resetar senha' });
+  }
+});
+
 module.exports = router;
 

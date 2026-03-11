@@ -652,6 +652,28 @@
       color: #34d399;
     }
 
+    /* ========= MODAL OVERLAY ========= */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    /* ========= CLIENT VIEW ========= */
+    .client-view .admin-only {
+      display: none !important;
+    }
+
     /* ========= ONBOARDING ========= */
     .onboarding-page {
       min-height: 100vh;
@@ -1778,11 +1800,7 @@
           <span class="status-text-live">Sistema Online</span>
         </div>
 
-        <!-- Login Type Tabs -->
-        <div class="login-tabs">
-          <button class="login-tab active" onclick="switchLoginTab('client')">Cliente</button>
-          <button class="login-tab" onclick="switchLoginTab('admin')">Administrador</button>
-        </div>
+        <!-- Client login only visible by default; admin login accessed via #admin hash -->
 
         <!-- Client Login -->
         <form id="form-client-login" onsubmit="handleClientLogin(event)">
@@ -1803,6 +1821,9 @@
             <p style="font-size:11px; color:#475569; margin-top:6px; font-weight:400;">Primeiro acesso? Use seu CPF/CNPJ como senha.</p>
           </div>
           <button type="submit" class="btn-primary" id="btn-client-login">Acessar Rastreamento</button>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="showForgotPassword(event)" style="color:#6366f1;font-size:12px;text-decoration:none;">Esqueci minha senha</a>
+          </div>
         </form>
 
         <!-- Admin Login -->
@@ -1823,6 +1844,9 @@
           </div>
           <button type="submit" class="btn-primary" id="btn-admin-login">Entrar como Admin</button>
         </form>
+        <div style="text-align:center;margin-top:16px;">
+          <a href="#admin" onclick="switchLoginTab('admin');return false;" style="color:#475569;font-size:11px;text-decoration:none;opacity:0.5;">Acesso administrativo</a>
+        </div>
       </div>
     </div>
   </div>
@@ -1863,6 +1887,29 @@
           </ul>
           <button type="submit" class="btn-primary" id="btn-change-pw">Alterar Senha</button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== FORGOT PASSWORD MODAL ======== -->
+  <div id="forgot-password-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeForgotPassword()">
+    <div class="login-card" style="max-width:400px;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+      <div class="login-logo">
+        <img src="/logo-login.png" alt="HSQ" style="width:60px;height:60px;">
+        <h1 style="font-size:20px;">Recuperar Senha</h1>
+        <p style="color:#94a3b8;font-size:13px;">Informe seu CPF ou CNPJ para resetar sua senha</p>
+      </div>
+      <div id="forgot-error" class="error-msg"></div>
+      <div id="forgot-success" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;margin-bottom:16px;color:#22c55e;font-size:13px;text-align:center;"></div>
+      <form onsubmit="handleForgotPassword(event)">
+        <div class="form-group">
+          <label>CPF ou CNPJ</label>
+          <input type="text" id="forgot-document" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="maskDocument(this)" maxlength="18" autocomplete="off" required>
+        </div>
+        <button type="submit" class="btn-primary" id="btn-forgot">Recuperar Senha</button>
+      </form>
+      <div style="text-align:center;margin-top:12px;">
+        <a href="#" onclick="closeForgotPassword();return false;" style="color:#94a3b8;font-size:12px;text-decoration:none;">Voltar ao login</a>
       </div>
     </div>
   </div>
@@ -1939,19 +1986,19 @@
       <div class="admin-header-left">
         <img src="/logo-login.png" alt="HSQ">
         <h2>HSQ Rastreamento</h2>
-        <span>Painel Admin</span>
+        <span id="panel-title-badge">Painel Admin</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="admin-name-display"></span>
-        <button class="action-btn btn-edit" onclick="showTrackingPage()" style="background:rgba(34,197,94,0.15);color:#22c55e;border-color:rgba(34,197,94,0.3);">Rastreamento ao Vivo</button>
-        <button class="action-btn btn-edit" onclick="openTraccarAdmin()">Abrir Traccar</button>
+        <button class="action-btn btn-edit admin-only" onclick="showTrackingPage()" style="background:rgba(34,197,94,0.15);color:#22c55e;border-color:rgba(34,197,94,0.3);">Rastreamento ao Vivo</button>
+        <button class="action-btn btn-edit admin-only" onclick="openTraccarAdmin()">Abrir Traccar</button>
         <button class="action-btn btn-toggle-off" onclick="logout()">Sair</button>
       </div>
     </div>
 
     <!-- Admin Tabs Navigation -->
     <div class="admin-tabs">
-      <button class="admin-tab active" onclick="switchAdminTab('tab-dashboard')">Dashboard</button>
+      <button class="admin-tab active" id="tab-btn-dashboard" onclick="switchAdminTab('tab-dashboard')">Dashboard</button>
       <button class="admin-tab" onclick="switchAdminTab('tab-replay')">Replay de Rotas</button>
       <button class="admin-tab" onclick="switchAdminTab('tab-reports')">Relatorios</button>
       <button class="admin-tab" onclick="switchAdminTab('tab-geofences')">Geofences</button>
@@ -1961,7 +2008,7 @@
 
     <!-- ===== TAB: DASHBOARD (existing content) ===== -->
     <div id="tab-dashboard" class="admin-tab-content active">
-      <div class="stats-grid" id="stats-grid">
+      <div class="stats-grid admin-only" id="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Total de Clientes</div>
           <div class="stat-value" id="stat-total">-</div>
@@ -1985,7 +2032,7 @@
       </div>
 
       <!-- Online Users Section -->
-      <div class="panel-card" id="online-users-panel" style="margin-bottom:24px;">
+      <div class="panel-card admin-only" id="online-users-panel" style="margin-bottom:24px;">
         <div class="panel-header">
           <h3>Usuarios Online</h3>
           <button class="action-btn btn-edit" onclick="loadOnlineUsers()" style="font-size:12px;">Atualizar</button>
@@ -1995,7 +2042,7 @@
         </div>
       </div>
 
-      <div class="panel-card">
+      <div class="panel-card admin-only">
         <div class="panel-header">
           <h3>Gerenciar Clientes</h3>
           <div style="display:flex;gap:12px;align-items:center;">
@@ -2024,7 +2071,7 @@
       </div>
 
       <!-- Devices Management Panel -->
-      <div class="panel-card" style="margin-top:24px;">
+      <div class="panel-card admin-only" style="margin-top:24px;">
         <div class="panel-header">
           <h3>Gerenciar Dispositivos</h3>
           <div style="display:flex;gap:12px;align-items:center;">
@@ -2049,6 +2096,15 @@
               <tr><td colspan="7" style="text-align:center;color:#64748b;padding:40px;">Carregando...</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Client Tracking View (only visible in client mode) -->
+      <div id="client-map-placeholder" class="client-only" style="display:none;height:calc(100vh - 140px);background:#0f172a;border-radius:12px;overflow:hidden;position:relative;">
+        <div id="client-map" style="width:100%;height:100%;"></div>
+        <div class="tracking-stats-bar" style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);">
+          <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="cmap-moving">0</span> em movimento</div>
+          <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="cmap-stopped">0</span> parados</div>
         </div>
       </div>
     </div> <!-- end tab-dashboard -->
@@ -2813,6 +2869,8 @@
         return;
       }
       if (currentUser.role === 'admin') {
+        document.getElementById('page-admin').classList.remove('client-view');
+        document.getElementById('page-admin').classList.add('admin-view');
         showPage('page-admin');
         loadAdminDashboard();
         hideLoading();
@@ -2827,21 +2885,19 @@
         showPage('page-onboarding');
         hideLoading();
       } else {
-        // Show tracking page for clients
-        showTrackingPage();
+        // Show admin panel with client view mode
+        setupClientView();
+        showPage('page-admin');
         hideLoading();
       }
     }
 
     // ==================== LOGIN ====================
     function switchLoginTab(tab) {
-      document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
       if (tab === 'client') {
-        document.querySelectorAll('.login-tab')[0].classList.add('active');
         document.getElementById('form-client-login').classList.remove('hidden');
         document.getElementById('form-admin-login').classList.add('hidden');
       } else {
-        document.querySelectorAll('.login-tab')[1].classList.add('active');
         document.getElementById('form-client-login').classList.add('hidden');
         document.getElementById('form-admin-login').classList.remove('hidden');
       }
@@ -2984,6 +3040,129 @@
         btn.disabled = false;
         btn.textContent = 'Alterar Senha';
       }
+    }
+
+    // ==================== FORGOT PASSWORD ====================
+    function showForgotPassword(e) {
+      e.preventDefault();
+      document.getElementById('forgot-password-modal').classList.remove('hidden');
+      document.getElementById('forgot-error').textContent = '';
+      document.getElementById('forgot-success').style.display = 'none';
+      document.getElementById('forgot-document').value = '';
+    }
+
+    function closeForgotPassword() {
+      document.getElementById('forgot-password-modal').classList.add('hidden');
+    }
+
+    async function handleForgotPassword(e) {
+      e.preventDefault();
+      const document = document.getElementById('forgot-document').value;
+      const errEl = document.getElementById('forgot-error');
+      const successEl = document.getElementById('forgot-success');
+      const btn = document.getElementById('btn-forgot');
+
+      errEl.textContent = '';
+      successEl.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Enviando...';
+
+      try {
+        const resp = await fetch(`${API_URL}/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+
+        successEl.textContent = data.message;
+        successEl.style.display = 'block';
+        setTimeout(() => closeForgotPassword(), 3000);
+      } catch (err) {
+        errEl.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Recuperar Senha';
+      }
+    }
+
+    // ==================== CLIENT VIEW SETUP ====================
+    function setupClientView() {
+      var adminPage = document.getElementById('page-admin');
+      adminPage.classList.add('client-view');
+      adminPage.classList.remove('admin-view');
+
+      // Change header badge
+      var badgeSpan = document.getElementById('panel-title-badge');
+      if (badgeSpan) badgeSpan.textContent = 'Painel Cliente';
+
+      // Display name
+      document.getElementById('admin-name-display').textContent = currentUser.name;
+
+      // Rename first tab
+      var dashboardBtn = document.getElementById('tab-btn-dashboard');
+      if (dashboardBtn) dashboardBtn.textContent = 'Rastreamento ao Vivo';
+
+      // Show client tracking container
+      var clientPlaceholder = document.getElementById('client-map-placeholder');
+      if (clientPlaceholder) clientPlaceholder.classList.add('client-only');
+
+      // Switch to dashboard tab
+      switchAdminTab('tab-dashboard');
+
+      // Init client map after a short delay
+      setTimeout(function() {
+        initClientMap();
+      }, 200);
+    }
+
+    function initClientMap() {
+      var mapContainer = document.getElementById('client-map');
+      if (!mapContainer || window._clientMapInitialized) return;
+
+      try {
+        window._clientMap = L.map('client-map').setView([currentUser.defaultLat || -15.8267, currentUser.defaultLng || -48.0166], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap',
+          maxZoom: 19,
+        }).addTo(window._clientMap);
+
+        window._clientMapInitialized = true;
+        window._clientMapMarkers = {};
+        loadClientMapPositions();
+      } catch (err) {
+        console.error('Error initializing client map:', err);
+      }
+    }
+
+    function loadClientMapPositions() {
+      // This will fetch and display tracking data for client's vehicles
+      fetch(`${API_URL}/devices`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+      .then(r => r.json())
+      .then(devices => {
+        if (!devices || !Array.isArray(devices)) return;
+        var moving = 0, stopped = 0;
+        devices.forEach(dev => {
+          if (dev.position) {
+            var latLng = [dev.position.latitude, dev.position.longitude];
+            var icon = dev.position.speed > 0 ? '🟢' : '🔴';
+            if (!window._clientMapMarkers[dev.id]) {
+              window._clientMapMarkers[dev.id] = L.marker(latLng, { title: dev.name });
+            } else {
+              window._clientMapMarkers[dev.id].setLatLng(latLng);
+            }
+            window._clientMapMarkers[dev.id].bindPopup(`<strong>${dev.name}</strong><br>Vel: ${Math.round(dev.position.speed)} km/h`);
+            window._clientMapMarkers[dev.id].addTo(window._clientMap);
+            if (dev.position.speed > 0) moving++; else stopped++;
+          }
+        });
+        document.getElementById('cmap-moving').textContent = moving;
+        document.getElementById('cmap-stopped').textContent = stopped;
+      })
+      .catch(err => console.error('Error loading client map positions:', err));
     }
 
     // ==================== ONBOARDING ====================
@@ -5541,6 +5720,12 @@
       });
       document.getElementById('stat-moving').textContent = moving;
       document.getElementById('stat-stopped').textContent = stopped;
+    }
+
+    // Handle URL hash for admin login
+    if (window.location.hash === '#admin') {
+      switchLoginTab('admin');
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
 
     checkAuth();
