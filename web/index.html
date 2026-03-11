@@ -3067,18 +3067,19 @@
         });
         var data = await resp.json();
         if (!resp.ok) throw new Error(data.error || 'Erro ao processar');
-        succEl.textContent = data.message;
-        succEl.style.display = 'block';
         if (data.mode === 'code') {
-          // Email code flow - show step 2
+          // Email code sent - show step 2
+          succEl.textContent = data.message;
+          succEl.style.display = 'block';
           document.getElementById('forgot-step1').style.display = 'none';
           document.getElementById('forgot-step2').style.display = 'block';
           document.getElementById('forgot-subtitle').textContent = 'Digite o codigo enviado para ' + (data.email || 'seu email');
         } else {
-          // Direct reset - hide form, show success, auto-close
+          // Info mode - show message (contact admin)
+          succEl.innerHTML = data.message + '<br><br><small style="color:#94a3b8;">Contato do administrador: (84) 98172-0032</small>';
+          succEl.style.display = 'block';
           document.getElementById('forgot-step1').style.display = 'none';
-          document.getElementById('forgot-subtitle').textContent = 'Senha recuperada!';
-          setTimeout(function() { closeForgotPassword(); }, 4000);
+          document.getElementById('forgot-subtitle').textContent = 'Recuperacao de Senha';
         }
       } catch (err) {
         errEl.textContent = err.message;
