@@ -1888,7 +1888,7 @@
           <label>CPF ou CNPJ</label>
           <input type="text" id="forgot-document" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="maskDocument(this)" maxlength="18" autocomplete="off" required>
         </div>
-        <button type="submit" class="btn-primary" id="btn-forgot-step1">Enviar Codigo por Email</button>
+        <button type="submit" class="btn-primary" id="btn-forgot-step1">Recuperar Senha</button>
       </form>
 
       <!-- Step 2: Enter code -->
@@ -3033,7 +3033,9 @@
     // ==================== FORGOT PASSWORD ====================
     function showForgotPassword(e) {
       if (e) e.preventDefault();
-      document.getElementById('forgot-password-modal').classList.remove('hidden');
+      var modal = document.getElementById('forgot-password-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('show');
       document.getElementById('forgot-step1').style.display = 'block';
       document.getElementById('forgot-step2').style.display = 'none';
       document.getElementById('forgot-error').classList.remove('show');
@@ -3042,7 +3044,9 @@
       document.getElementById('forgot-document').value = '';
     }
     function closeForgotPassword() {
-      document.getElementById('forgot-password-modal').classList.add('hidden');
+      var modal = document.getElementById('forgot-password-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('show');
     }
     var _forgotDoc = '';
     async function handleForgotStep1(e) {
@@ -3054,7 +3058,7 @@
       succEl.style.display = 'none';
       _forgotDoc = document.getElementById('forgot-document').value;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Enviando...';
+      btn.innerHTML = '<span class="spinner"></span> Processando...';
       try {
         var resp = await fetch(API_URL + '/auth/forgot-password', {
           method: 'POST',
@@ -3062,19 +3066,26 @@
           body: JSON.stringify({ document: _forgotDoc })
         });
         var data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Erro ao enviar codigo');
+        if (!resp.ok) throw new Error(data.error || 'Erro ao processar');
         succEl.textContent = data.message;
         succEl.style.display = 'block';
-        // Switch to step 2
-        document.getElementById('forgot-step1').style.display = 'none';
-        document.getElementById('forgot-step2').style.display = 'block';
-        document.getElementById('forgot-subtitle').textContent = 'Digite o codigo enviado para ' + (data.email || 'seu email');
+        if (data.mode === 'code') {
+          // Email code flow - show step 2
+          document.getElementById('forgot-step1').style.display = 'none';
+          document.getElementById('forgot-step2').style.display = 'block';
+          document.getElementById('forgot-subtitle').textContent = 'Digite o codigo enviado para ' + (data.email || 'seu email');
+        } else {
+          // Direct reset - hide form, show success, auto-close
+          document.getElementById('forgot-step1').style.display = 'none';
+          document.getElementById('forgot-subtitle').textContent = 'Senha recuperada!';
+          setTimeout(function() { closeForgotPassword(); }, 4000);
+        }
       } catch (err) {
         errEl.textContent = err.message;
         errEl.classList.add('show');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Enviar Codigo por Email';
+        btn.textContent = 'Recuperar Senha';
       }
     }
     async function handleForgotStep2(e) {

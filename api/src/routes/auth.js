@@ -262,28 +262,16 @@ router.post('/heartbeat', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/auth/forgot-password - Send reset code to email
+// POST /api/auth/forgot-password - Send reset code to email (or reset directly if no SMTP)
 router.post('/forgot-password', async (req, res) => {
   try {
     const { document } = req.body;
     if (!document) {
-      return res.status(400).json({ error: 'Documento é obrigatório' });
+      return res.status(400).json({ error: 'Documento e obrigatorio' });
     }
 
     const db = req.app.locals.db;
     const cleanDocument = cleanDoc(document);
-
-    // Ensure reset codes table exists
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS password_reset_codes (
-        id SERIAL PRIMARY KEY,
-        client_id INTEGER NOT NULL,
-        code VARCHAR(6) NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        used BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
 
     // Find client by document
     const result = await db.query(
@@ -292,83 +280,109 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      // Don't reveal if document exists - still return success
-      return res.json({ message: 'Se o documento estiver cadastrado e possuir email, um código será enviado.' });
+      return res.status(404).json({ error: 'Documento nao cadastrado no sistema' });
     }
 
     const client = result.rows[0];
 
-    if (!client.email) {
-      return res.json({ message: 'Se o documento estiver cadastrado e possuir email, um código será enviado.' });
-    }
+    // Check if SMTP is configured
+    const smtpPass = process.env.SMTP_PASS || '';
+    const hasSmtp = smtpPass.length > 0;
 
-    // Generate 6-digit code
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    if (hasSmtp && client.email) {
+      // === EMAIL CODE FLOW ===
+      // Ensure reset codes table exists (UUID client_id)
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_codes (
+          id SERIAL PRIMARY KEY,
+          client_id UUID NOT NULL,
+          code VARCHAR(6) NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          used BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
 
-    // Invalidate previous codes
-    await db.query('UPDATE password_reset_codes SET used = true WHERE client_id = $1 AND used = false', [client.id]);
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    // Store code
-    await db.query(
-      'INSERT INTO password_reset_codes (client_id, code, expires_at) VALUES ($1, $2, $3)',
-      [client.id, code, expiresAt]
-    );
+      await db.query('UPDATE password_reset_codes SET used = true WHERE client_id = $1 AND used = false', [client.id]);
+      await db.query(
+        'INSERT INTO password_reset_codes (client_id, code, expires_at) VALUES ($1, $2, $3)',
+        [client.id, code, expiresAt]
+      );
 
-    // Send email
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER || 'hsqrastreamento@gmail.com',
-        pass: process.env.SMTP_PASS || '',
-      },
-    });
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER || 'hsqrastreamento@gmail.com',
+          pass: smtpPass,
+        },
+      });
 
-    const mailSent = await transporter.sendMail({
-      from: '"HSQ Rastreamento" <hsqrastreamento@gmail.com>',
-      to: client.email,
-      subject: 'Código de Recuperação de Senha - HSQ Rastreamento',
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-          <div style="text-align:center;margin-bottom:24px;">
-            <h2 style="color:#1e293b;">HSQ Rastreamento</h2>
+      const mailSent = await transporter.sendMail({
+        from: '"HSQ Rastreamento" <hsqrastreamento@gmail.com>',
+        to: client.email,
+        subject: 'Codigo de Recuperacao de Senha - HSQ Rastreamento',
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+            <div style="text-align:center;margin-bottom:24px;">
+              <h2 style="color:#1e293b;">HSQ Rastreamento</h2>
+            </div>
+            <p>Ola <strong>${client.name}</strong>,</p>
+            <p>Voce solicitou a recuperacao de senha. Use o codigo abaixo:</p>
+            <div style="text-align:center;margin:24px 0;">
+              <div style="display:inline-block;background:#f1f5f9;padding:16px 32px;border-radius:12px;font-size:32px;font-weight:bold;letter-spacing:8px;color:#1e293b;">${code}</div>
+            </div>
+            <p style="color:#64748b;font-size:13px;">Este codigo expira em 15 minutos.</p>
+            <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+            <p style="color:#94a3b8;font-size:11px;text-align:center;">HSQ Rastreamento</p>
           </div>
-          <p>Olá <strong>${client.name}</strong>,</p>
-          <p>Você solicitou a recuperação de senha. Use o código abaixo para redefinir sua senha:</p>
-          <div style="text-align:center;margin:24px 0;">
-            <div style="display:inline-block;background:#f1f5f9;padding:16px 32px;border-radius:12px;font-size:32px;font-weight:bold;letter-spacing:8px;color:#1e293b;">${code}</div>
-          </div>
-          <p style="color:#64748b;font-size:13px;">Este código expira em 15 minutos.</p>
-          <p style="color:#64748b;font-size:13px;">Se você não solicitou esta recuperação, ignore este email.</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
-          <p style="color:#94a3b8;font-size:11px;text-align:center;">HSQ Rastreamento - Monitoramento Inteligente</p>
-        </div>
-      `,
-    }).catch(err => {
-      console.error('Email send error:', err.message);
-      return null;
-    });
+        `,
+      }).catch(err => {
+        console.error('Email send error:', err.message);
+        return null;
+      });
 
-    if (!mailSent) {
-      return res.status(500).json({ error: 'Erro ao enviar email. Verifique se seu email está cadastrado corretamente.' });
+      if (!mailSent) {
+        return res.status(500).json({ error: 'Erro ao enviar email. Tente novamente.' });
+      }
+
+      const emailParts = client.email.split('@');
+      const maskedEmail = emailParts[0].substring(0, 2) + '***@' + emailParts[1];
+
+      await db.query(
+        'INSERT INTO audit_log (user_type, user_id, action, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
+        ['client', client.id, 'password_reset_requested', JSON.stringify({ method: 'email_code' }), req.ip]
+      );
+
+      return res.json({ mode: 'code', message: 'Codigo enviado para ' + maskedEmail, email: maskedEmail });
+    } else {
+      // === DIRECT RESET FLOW (no SMTP or no email) ===
+      // Reset password directly to the document number
+      if (client.traccar_user_id) {
+        const traccar = new TraccarService(req.app.locals.traccarUrl);
+        await traccar.updatePassword(client.traccar_user_id, cleanDocument);
+      }
+
+      await db.query(
+        'UPDATE clients SET must_change_password = true, is_first_login = true, updated_at = NOW() WHERE id = $1',
+        [client.id]
+      );
+
+      await db.query(
+        'INSERT INTO audit_log (user_type, user_id, action, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
+        ['client', client.id, 'password_reset_direct', JSON.stringify({ method: 'direct_reset' }), req.ip]
+      );
+
+      return res.json({ mode: 'direct', message: 'Senha resetada com sucesso! Use seu CPF/CNPJ como senha para fazer login.' });
     }
-
-    // Mask email for display
-    const emailParts = client.email.split('@');
-    const maskedEmail = emailParts[0].substring(0, 2) + '***@' + emailParts[1];
-
-    await db.query(
-      'INSERT INTO audit_log (user_type, user_id, action, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
-      ['client', client.id, 'password_reset_requested', JSON.stringify({ method: 'email_code' }), req.ip]
-    );
-
-    res.json({ message: 'Código enviado para ' + maskedEmail, email: maskedEmail });
   } catch (err) {
     console.error('Forgot password error:', err.message);
-    res.status(500).json({ error: 'Erro ao processar solicitação' });
+    res.status(500).json({ error: 'Erro ao processar solicitacao' });
   }
 });
 
@@ -377,44 +391,39 @@ router.post('/verify-reset-code', async (req, res) => {
   try {
     const { document, code } = req.body;
     if (!document || !code) {
-      return res.status(400).json({ error: 'Documento e código são obrigatórios' });
+      return res.status(400).json({ error: 'Documento e codigo sao obrigatorios' });
     }
 
     const db = req.app.locals.db;
     const cleanDocument = cleanDoc(document);
 
-    // Find client
     const clientResult = await db.query(
       "SELECT * FROM clients WHERE REPLACE(REPLACE(REPLACE(document, '.', ''), '-', ''), '/', '') = $1",
       [cleanDocument]
     );
 
     if (clientResult.rows.length === 0) {
-      return res.status(400).json({ error: 'Código inválido ou expirado' });
+      return res.status(400).json({ error: 'Codigo invalido ou expirado' });
     }
 
     const client = clientResult.rows[0];
 
-    // Check code
     const codeResult = await db.query(
       'SELECT * FROM password_reset_codes WHERE client_id = $1 AND code = $2 AND used = false AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
       [client.id, code]
     );
 
     if (codeResult.rows.length === 0) {
-      return res.status(400).json({ error: 'Código inválido ou expirado' });
+      return res.status(400).json({ error: 'Codigo invalido ou expirado' });
     }
 
-    // Mark code as used
     await db.query('UPDATE password_reset_codes SET used = true WHERE id = $1', [codeResult.rows[0].id]);
 
-    // Reset password in Traccar to the document number
     if (client.traccar_user_id) {
       const traccar = new TraccarService(req.app.locals.traccarUrl);
       await traccar.updatePassword(client.traccar_user_id, cleanDocument);
     }
 
-    // Mark as must change password
     await db.query(
       'UPDATE clients SET must_change_password = true, is_first_login = true, updated_at = NOW() WHERE id = $1',
       [client.id]
@@ -428,7 +437,7 @@ router.post('/verify-reset-code', async (req, res) => {
     res.json({ message: 'Senha resetada! Use seu CPF/CNPJ como senha para fazer login.' });
   } catch (err) {
     console.error('Verify reset code error:', err.message);
-    res.status(500).json({ error: 'Erro ao verificar código' });
+    res.status(500).json({ error: 'Erro ao verificar codigo' });
   }
 });
 
