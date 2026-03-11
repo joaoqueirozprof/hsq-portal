@@ -1262,9 +1262,11 @@
     /* ========= TRACKING PAGE ========= */
     .tracking-page {
       height: 100vh;
+      height: 100dvh; /* dynamic viewport height - accounts for mobile browser chrome */
       display: flex;
       flex-direction: column;
       background: #0a1628;
+      overflow: hidden;
     }
     .tracking-header {
       display: flex;
@@ -1399,8 +1401,7 @@
       flex: 1;
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 60px);
-      min-height: 500px;
+      min-height: 0; /* critical for flex children to shrink */
       gap: 0;
     }
     .tracking-map-wrap {
@@ -1460,6 +1461,9 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     .btn-back-admin:hover { border-color: #4183ef; color: #e2e8f0; }
+    @media (max-width: 768px) {
+      .btn-hide-mobile { display: none !important; }
+    }
     .btn-street-view {
       display: inline-flex;
       align-items: center;
@@ -1740,14 +1744,28 @@
 
     /* Mobile landscape & small tablets */
     @media (max-width: 768px) {
-      .tracking-body { flex-direction: column; }
+      /* Tracking page: full viewport, no scroll */
+      .tracking-page { height: 100vh; height: 100dvh; overflow: hidden; }
+      .tracking-body { flex-direction: column; flex: 1; min-height: 0; }
       .tracking-sidebar {
-        width: 100%; height: auto; max-height: 35vh;
+        width: 100%; flex: 0 0 auto; max-height: 28vh;
         border-right: none; border-bottom: 1px solid rgba(65,131,239,0.1);
       }
-      .tracking-map-container { height: 65vh; }
+      .tracking-map-container { flex: 1; min-height: 0; }
       .tracking-map-wrap { height: 100% !important; }
       #tracking-map { height: 100% !important; }
+
+      /* Tracking header: compact for mobile */
+      .tracking-header { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
+      .tracking-header-left { gap: 8px; min-width: 0; flex-shrink: 1; }
+      .tracking-header-left img { width: 28px; height: 28px; border-radius: 6px; }
+      .tracking-header-left h2 { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tracking-header-left span { font-size: 10px; padding: 1px 6px; }
+      .tracking-header-right { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+      .tracking-header-right #tracking-user-name { display: none; }
+      .btn-back-admin { padding: 6px 10px; font-size: 11px; white-space: nowrap; }
+
+      /* Admin panel */
       .admin-header { padding: 12px 16px; }
       .admin-header-left h2 { font-size: 16px; }
       .admin-header-left span { display: none; }
@@ -1758,11 +1776,17 @@
       .replay-form-row .form-group { min-width: 100%; }
       table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
       .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+      /* Stats bar on map */
+      .tracking-stats-bar { bottom: auto; top: 8px; left: 50%; transform: translateX(-50%); right: auto; gap: 6px; }
+      .tracking-stat-pill { font-size: 11px; padding: 4px 10px; }
     }
 
     /* Mobile portrait */
     @media (max-width: 480px) {
       body { font-size: 14px; }
+
+      /* Login page */
       .login-container { padding: 12px; }
       .login-card { padding: 20px 16px; border-radius: 16px; }
       .logo-radar-container { width: 120px; height: 120px; }
@@ -1781,6 +1805,8 @@
       .onboarding-card { padding: 28px 20px; width: 95%; }
       .step-icon { width: 48px; height: 48px; font-size: 22px; }
       .step-title { font-size: 18px; }
+
+      /* Admin panel */
       .admin-content { padding: 12px; }
       .admin-header { padding: 10px 12px; }
       .admin-header-left img { width: 32px; height: 32px; }
@@ -1792,18 +1818,29 @@
       .stat-card { padding: 14px; }
       table { font-size: 12px; }
       table th, table td { padding: 8px 10px; }
-      .tracking-header { padding: 10px 12px; }
-      .tracking-header-left h2 { font-size: 14px; }
-      .tracking-sidebar { max-height: 30vh; }
-      .tracking-map-container { height: 70vh; }
-      .vehicle-card { padding: 10px; }
-      .vehicle-card-name { font-size: 13px; }
+
+      /* Tracking page: maximized map */
+      .tracking-header { padding: 6px 10px; }
+      .tracking-header-left h2 { display: none; } /* hide title, keep logo+badge */
+      .tracking-header-left img { width: 26px; height: 26px; }
+      .btn-back-admin { padding: 5px 8px; font-size: 10px; border-radius: 6px; }
+      .tracking-sidebar {
+        max-height: 25vh;
+      }
+      .tracking-sidebar-header { padding: 10px 12px; }
+      .tracking-sidebar-header h3 { font-size: 13px; margin-bottom: 6px; }
+      .tracking-search { padding: 8px 10px; font-size: 14px; }
+      .vehicle-card { padding: 10px; margin-bottom: 4px; }
+      .vehicle-card .v-name { font-size: 13px; }
+      .vehicle-card .v-meta { font-size: 11px; gap: 8px; }
+      .vehicle-card .v-address { font-size: 10px; }
+
+      /* Modals */
       .modal-content { padding: 20px 16px !important; border-radius: 16px !important; }
       .modal-content h2 { font-size: 18px; }
       .form-group label { font-size: 13px; }
-      .forgot-password-modal .modal-content { width: 92vw !important; }
 
-      /* Tracking overlay info panel - mobile friendly */
+      /* Tracking overlay info panel - slides up from bottom */
       .tracking-vehicle-overlay {
         bottom: 0; left: 0; right: 0; top: auto !important;
         max-width: 100% !important; width: 100% !important;
@@ -1811,7 +1848,7 @@
         max-height: 45vh; overflow-y: auto;
       }
 
-      /* Replay player - mobile */
+      /* Replay player */
       .replay-player { padding: 8px 12px; }
       .replay-controls { flex-wrap: wrap; gap: 6px; }
       .replay-controls button { padding: 6px 10px; font-size: 12px; }
@@ -1819,27 +1856,21 @@
 
     /* Touch-friendly improvements for all mobile */
     @media (hover: none) and (pointer: coarse) {
-      .btn-primary, .btn, button, .admin-tab, .vehicle-card, a {
-        min-height: 44px; /* Apple's recommended touch target */
-      }
       .vehicle-card { cursor: pointer; }
-      /* Remove hover effects on touch devices */
-      .admin-tab:hover { background: none; }
       .vehicle-card:hover { transform: none; }
     }
 
     /* Safe areas for notch phones */
     @supports (padding: env(safe-area-inset-top)) {
-      .admin-header { padding-top: calc(12px + env(safe-area-inset-top)); }
-      .tracking-header { padding-top: calc(10px + env(safe-area-inset-top)); }
+      .tracking-header { padding-top: calc(6px + env(safe-area-inset-top)); }
       .tracking-vehicle-overlay { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
       .replay-player { padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
     }
 
-    /* PWA standalone mode */
+    /* PWA standalone mode - extra top padding for status bar */
     @media (display-mode: standalone) {
       .admin-header { padding-top: calc(16px + env(safe-area-inset-top, 0px)); }
-      .tracking-header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+      .tracking-header { padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
     }
   </style>
 </head>
@@ -2381,11 +2412,11 @@
         <h2>HSQ Rastreamento</h2>
         <span>AO VIVO</span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div class="tracking-header-right" style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="tracking-user-name"></span>
-        <button class="btn-back-admin" id="btn-back-admin" onclick="goBackFromTracking()" style="display:none;">Voltar ao Painel</button>
-        <button class="btn-back-admin" onclick="toggleTrackingFullscreen()" id="btn-fullscreen" style="color:#a78bfa;border-color:rgba(139,92,246,0.3);">Tela Cheia</button>
-        <button class="btn-back-admin admin-only-btn" onclick="openTraccarDirect()">Abrir Traccar</button>
+        <button class="btn-back-admin" id="btn-back-admin" onclick="goBackFromTracking()" style="display:none;">Voltar</button>
+        <button class="btn-back-admin btn-hide-mobile" onclick="toggleTrackingFullscreen()" id="btn-fullscreen" style="color:#a78bfa;border-color:rgba(139,92,246,0.3);">Tela Cheia</button>
+        <button class="btn-back-admin admin-only-btn btn-hide-mobile" onclick="openTraccarDirect()">Abrir Traccar</button>
         <button class="btn-back-admin" onclick="logout()" style="color:#ef4444;border-color:rgba(239,68,68,0.3);">Sair</button>
       </div>
     </div>
