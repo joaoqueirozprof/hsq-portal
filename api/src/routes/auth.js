@@ -78,18 +78,40 @@ router.post('/login', async (req, res) => {
     const traccar = new TraccarService(req.app.locals.traccarUrl);
     const traccarUser = await traccar.request('GET', `/api/users/${client.traccar_user_id}`);
 
-    // Try to login to Traccar with the password
-    try {
-      await traccar.clientLogin(traccarUser.email, password);
-    } catch (err) {
-      if (client.is_first_login) {
+    // If must_change_password is true (after reset), ONLY accept document as password
+    if (client.must_change_password) {
+      // Validate that the user entered their document as password
+      const enteredClean = cleanDoc(password);
+      if (enteredClean !== cleanDocument && password !== cleanDocument) {
+        return res.status(401).json({ error: 'Apos o reset, use seu CPF/CNPJ (somente numeros) como senha temporaria' });
+      }
+
+      // Try Traccar login with cleanDocument
+      try {
+        await traccar.clientLogin(traccarUser.email, cleanDocument);
+      } catch {
+        // Traccar password might not have been updated during reset - force update now
         try {
+          await traccar.updatePassword(client.traccar_user_id, cleanDocument);
           await traccar.clientLogin(traccarUser.email, cleanDocument);
         } catch {
+          return res.status(401).json({ error: 'Erro ao autenticar. Entre em contato com o administrador.' });
+        }
+      }
+    } else {
+      // Normal login flow - try entered password
+      try {
+        await traccar.clientLogin(traccarUser.email, password);
+      } catch (err) {
+        if (client.is_first_login) {
+          try {
+            await traccar.clientLogin(traccarUser.email, cleanDocument);
+          } catch {
+            return res.status(401).json({ error: 'Senha incorreta' });
+          }
+        } else {
           return res.status(401).json({ error: 'Senha incorreta' });
         }
-      } else {
-        return res.status(401).json({ error: 'Senha incorreta' });
       }
     }
 
