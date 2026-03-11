@@ -1463,6 +1463,14 @@
     .btn-back-admin:hover { border-color: #4183ef; color: #e2e8f0; }
     @media (max-width: 768px) {
       .btn-hide-mobile { display: none !important; }
+      /* Fullscreen button: show icon on mobile, text on desktop */
+      .fs-btn-icon { display: none; }
+      .fs-btn-text { display: inline; }
+      @media (max-width: 768px) {
+        .fs-btn-icon { display: inline !important; }
+        .fs-btn-text { display: none !important; }
+        #btn-fullscreen { padding: 6px 10px; min-width: 36px; text-align: center; }
+      }
     }
     .btn-street-view {
       display: inline-flex;
@@ -2415,7 +2423,7 @@
       <div class="tracking-header-right" style="display:flex;gap:8px;align-items:center;">
         <span style="color:#94a3b8;font-size:13px;" id="tracking-user-name"></span>
         <button class="btn-back-admin" id="btn-back-admin" onclick="goBackFromTracking()" style="display:none;">Voltar</button>
-        <button class="btn-back-admin btn-hide-mobile" onclick="toggleTrackingFullscreen()" id="btn-fullscreen" style="color:#a78bfa;border-color:rgba(139,92,246,0.3);">Tela Cheia</button>
+        <button class="btn-back-admin" onclick="toggleTrackingFullscreen()" id="btn-fullscreen" style="color:#a78bfa;border-color:rgba(139,92,246,0.3);"><span class="fs-btn-text">Tela Cheia</span><span class="fs-btn-icon" style="display:none;font-size:16px;">&#9974;</span></button>
         <button class="btn-back-admin admin-only-btn btn-hide-mobile" onclick="openTraccarDirect()">Abrir Traccar</button>
         <button class="btn-back-admin" onclick="logout()" style="color:#ef4444;border-color:rgba(239,68,68,0.3);">Sair</button>
       </div>
@@ -4767,7 +4775,8 @@
       if (isTrackingFullscreen) {
         page.classList.add('tracking-fullscreen');
         overlay.style.display = 'block';
-        btn.textContent = 'Sair Tela Cheia';
+        btn.querySelector('.fs-btn-text').textContent = 'Sair Tela Cheia';
+        btn.querySelector('.fs-btn-icon').innerHTML = '&#10005;';
         // Request browser fullscreen
         if (page.requestFullscreen) page.requestFullscreen();
         else if (page.webkitRequestFullscreen) page.webkitRequestFullscreen();
@@ -4787,7 +4796,8 @@
       } else {
         page.classList.remove('tracking-fullscreen');
         overlay.style.display = 'none';
-        btn.textContent = 'Tela Cheia';
+        btn.querySelector('.fs-btn-text').textContent = 'Tela Cheia';
+        btn.querySelector('.fs-btn-icon').innerHTML = '&#9974;';
         if (document.exitFullscreen) document.exitFullscreen();
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       }
@@ -4801,7 +4811,9 @@
         isTrackingFullscreen = false;
         document.getElementById('page-tracking').classList.remove('tracking-fullscreen');
         document.getElementById('fullscreen-overlay').style.display = 'none';
-        document.getElementById('btn-fullscreen').textContent = 'Tela Cheia';
+        var fsBtn = document.getElementById('btn-fullscreen');
+        fsBtn.querySelector('.fs-btn-text').textContent = 'Tela Cheia';
+        fsBtn.querySelector('.fs-btn-icon').innerHTML = '&#9974;';
         setTimeout(function() { if (trackingMap) trackingMap.invalidateSize(); }, 300);
       }
     });
