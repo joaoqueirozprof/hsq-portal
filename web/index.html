@@ -1826,27 +1826,6 @@
           </div>
         </form>
 
-        <!-- Admin Login -->
-        <form id="form-admin-login" class="hidden" onsubmit="handleAdminLogin(event)">
-          <div id="admin-login-error" class="error-msg"></div>
-          <div class="form-group">
-            <label>Email</label>
-            <input type="email" id="admin-email" placeholder="admin@hsqrastreamento.com" required>
-          </div>
-          <div class="form-group">
-            <label>Senha</label>
-            <div class="password-wrapper">
-              <input type="password" id="admin-password" placeholder="Sua senha" required>
-              <button type="button" class="password-toggle" onclick="togglePassword('admin-password', this)" aria-label="Mostrar senha">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-          </div>
-          <button type="submit" class="btn-primary" id="btn-admin-login">Entrar como Admin</button>
-        </form>
-        <div style="text-align:center;margin-top:16px;">
-          <a href="#admin" onclick="switchLoginTab('admin');return false;" style="color:#475569;font-size:11px;text-decoration:none;opacity:0.5;">Acesso administrativo</a>
-        </div>
       </div>
     </div>
   </div>
@@ -1892,22 +1871,38 @@
   </div>
 
   <!-- ======== FORGOT PASSWORD MODAL ======== -->
+  <!-- ======== FORGOT PASSWORD MODAL ======== -->
   <div id="forgot-password-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeForgotPassword()">
-    <div class="login-card" style="max-width:400px;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
+    <div class="login-card" style="max-width:420px;margin:auto;position:relative;top:50%;transform:translateY(-50%);">
       <div class="login-logo">
         <img src="/logo-login.png" alt="HSQ" style="width:60px;height:60px;">
         <h1 style="font-size:20px;">Recuperar Senha</h1>
-        <p style="color:#94a3b8;font-size:13px;">Informe seu CPF ou CNPJ para resetar sua senha</p>
+        <p id="forgot-subtitle" style="color:#94a3b8;font-size:13px;">Informe seu CPF ou CNPJ</p>
       </div>
       <div id="forgot-error" class="error-msg"></div>
       <div id="forgot-success" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;margin-bottom:16px;color:#22c55e;font-size:13px;text-align:center;"></div>
-      <form onsubmit="handleForgotPassword(event)">
+
+      <!-- Step 1: Enter document -->
+      <form id="forgot-step1" onsubmit="handleForgotStep1(event)">
         <div class="form-group">
           <label>CPF ou CNPJ</label>
           <input type="text" id="forgot-document" placeholder="000.000.000-00 ou 00.000.000/0000-00" oninput="maskDocument(this)" maxlength="18" autocomplete="off" required>
         </div>
-        <button type="submit" class="btn-primary" id="btn-forgot">Recuperar Senha</button>
+        <button type="submit" class="btn-primary" id="btn-forgot-step1">Enviar Codigo por Email</button>
       </form>
+
+      <!-- Step 2: Enter code -->
+      <form id="forgot-step2" style="display:none;" onsubmit="handleForgotStep2(event)">
+        <div class="form-group">
+          <label>Codigo de 6 digitos</label>
+          <input type="text" id="forgot-code" placeholder="000000" maxlength="6" pattern="[0-9]{6}" style="text-align:center;font-size:24px;letter-spacing:8px;" required>
+        </div>
+        <button type="submit" class="btn-primary" id="btn-forgot-step2">Verificar Codigo</button>
+        <div style="text-align:center;margin-top:12px;">
+          <a href="#" onclick="resendCode(event)" style="color:#6366f1;font-size:12px;text-decoration:none;">Reenviar codigo</a>
+        </div>
+      </form>
+
       <div style="text-align:center;margin-top:12px;">
         <a href="#" onclick="closeForgotPassword();return false;" style="color:#94a3b8;font-size:12px;text-decoration:none;">Voltar ao login</a>
       </div>
@@ -2100,11 +2095,23 @@
       </div>
 
       <!-- Client Tracking View (only visible in client mode) -->
-      <div id="client-map-placeholder" class="client-only" style="display:none;height:calc(100vh - 140px);background:#0f172a;border-radius:12px;overflow:hidden;position:relative;">
-        <div id="client-map" style="width:100%;height:100%;"></div>
-        <div class="tracking-stats-bar" style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);">
-          <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="cmap-moving">0</span> em movimento</div>
-          <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="cmap-stopped">0</span> parados</div>
+      <div id="client-map-placeholder" style="display:none;height:calc(100vh - 140px);border-radius:12px;overflow:hidden;position:relative;">
+        <div style="display:flex;height:100%;">
+          <div id="client-vehicle-sidebar" style="width:280px;background:#1e293b;overflow-y:auto;border-right:1px solid #334155;">
+            <div style="padding:12px;border-bottom:1px solid #334155;">
+              <h3 style="color:#e2e8f0;font-size:14px;margin:0;">Veiculos (<span id="cmap-total">0</span>)</h3>
+            </div>
+            <div id="client-vehicle-list" style="padding:8px;">
+              <div style="text-align:center;color:#64748b;padding:20px;font-size:13px;">Carregando veiculos...</div>
+            </div>
+          </div>
+          <div style="flex:1;position:relative;">
+            <div id="client-map" style="width:100%;height:100%;background:#0f172a;"></div>
+            <div class="tracking-stats-bar" style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000;">
+              <div class="tracking-stat-pill"><span class="dot-green"></span> <span id="cmap-moving">0</span> em movimento</div>
+              <div class="tracking-stat-pill"><span class="dot-red"></span> <span id="cmap-stopped">0</span> parados</div>
+            </div>
+          </div>
         </div>
       </div>
     </div> <!-- end tab-dashboard -->
@@ -3044,47 +3051,87 @@
 
     // ==================== FORGOT PASSWORD ====================
     function showForgotPassword(e) {
-      e.preventDefault();
+      if (e) e.preventDefault();
       document.getElementById('forgot-password-modal').classList.remove('hidden');
-      document.getElementById('forgot-error').textContent = '';
+      document.getElementById('forgot-step1').style.display = 'block';
+      document.getElementById('forgot-step2').style.display = 'none';
+      document.getElementById('forgot-error').classList.remove('show');
       document.getElementById('forgot-success').style.display = 'none';
+      document.getElementById('forgot-subtitle').textContent = 'Informe seu CPF ou CNPJ';
       document.getElementById('forgot-document').value = '';
     }
-
     function closeForgotPassword() {
       document.getElementById('forgot-password-modal').classList.add('hidden');
     }
-
-    async function handleForgotPassword(e) {
+    var _forgotDoc = '';
+    async function handleForgotStep1(e) {
       e.preventDefault();
-      const document = document.getElementById('forgot-document').value;
-      const errEl = document.getElementById('forgot-error');
-      const successEl = document.getElementById('forgot-success');
-      const btn = document.getElementById('btn-forgot');
-
-      errEl.textContent = '';
-      successEl.style.display = 'none';
+      var btn = document.getElementById('btn-forgot-step1');
+      var errEl = document.getElementById('forgot-error');
+      var succEl = document.getElementById('forgot-success');
+      errEl.classList.remove('show');
+      succEl.style.display = 'none';
+      _forgotDoc = document.getElementById('forgot-document').value;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Enviando...';
-
       try {
-        const resp = await fetch(`${API_URL}/auth/forgot-password`, {
+        var resp = await fetch(API_URL + '/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ document }),
+          body: JSON.stringify({ document: _forgotDoc })
         });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error);
-
-        successEl.textContent = data.message;
-        successEl.style.display = 'block';
-        setTimeout(() => closeForgotPassword(), 3000);
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro ao enviar codigo');
+        succEl.textContent = data.message;
+        succEl.style.display = 'block';
+        // Switch to step 2
+        document.getElementById('forgot-step1').style.display = 'none';
+        document.getElementById('forgot-step2').style.display = 'block';
+        document.getElementById('forgot-subtitle').textContent = 'Digite o codigo enviado para ' + (data.email || 'seu email');
       } catch (err) {
         errEl.textContent = err.message;
+        errEl.classList.add('show');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Recuperar Senha';
+        btn.textContent = 'Enviar Codigo por Email';
       }
+    }
+    async function handleForgotStep2(e) {
+      e.preventDefault();
+      var btn = document.getElementById('btn-forgot-step2');
+      var errEl = document.getElementById('forgot-error');
+      var succEl = document.getElementById('forgot-success');
+      errEl.classList.remove('show');
+      succEl.style.display = 'none';
+      var code = document.getElementById('forgot-code').value;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Verificando...';
+      try {
+        var resp = await fetch(API_URL + '/auth/verify-reset-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ document: _forgotDoc, code: code })
+        });
+        var data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Codigo invalido');
+        succEl.textContent = data.message;
+        succEl.style.display = 'block';
+        document.getElementById('forgot-step2').style.display = 'none';
+        setTimeout(function() { closeForgotPassword(); }, 3000);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Verificar Codigo';
+      }
+    }
+    function resendCode(e) {
+      if (e) e.preventDefault();
+      document.getElementById('forgot-step2').style.display = 'none';
+      document.getElementById('forgot-step1').style.display = 'block';
+      document.getElementById('forgot-subtitle').textContent = 'Informe seu CPF ou CNPJ';
+      document.getElementById('forgot-success').style.display = 'none';
     }
 
     // ==================== CLIENT VIEW SETUP ====================
@@ -3106,7 +3153,7 @@
 
       // Show client tracking container
       var clientPlaceholder = document.getElementById('client-map-placeholder');
-      if (clientPlaceholder) clientPlaceholder.classList.add('client-only');
+      if (clientPlaceholder) clientPlaceholder.style.display = 'block';
 
       // Switch to dashboard tab
       switchAdminTab('tab-dashboard');
@@ -3131,39 +3178,99 @@
         window._clientMapInitialized = true;
         window._clientMapMarkers = {};
         loadClientMapPositions();
+        // Force map resize after becoming visible
+        [300, 600, 1000].forEach(function(d) {
+          setTimeout(function() {
+            if (window._clientMap) {
+              try { window._clientMap.invalidateSize(true); } catch(e) {}
+            }
+          }, d);
+        });
       } catch (err) {
         console.error('Error initializing client map:', err);
       }
     }
 
     function loadClientMapPositions() {
-      // This will fetch and display tracking data for client's vehicles
-      fetch(`${API_URL}/devices`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
+      fetch(API_URL + '/tracking/positions', {
+        headers: { 'Authorization': 'Bearer ' + authToken }
       })
-      .then(r => r.json())
-      .then(devices => {
-        if (!devices || !Array.isArray(devices)) return;
+      .then(function(r) { return r.json(); })
+      .then(function(vehicles) {
+        if (!vehicles || !Array.isArray(vehicles)) return;
         var moving = 0, stopped = 0;
-        devices.forEach(dev => {
-          if (dev.position) {
-            var latLng = [dev.position.latitude, dev.position.longitude];
-            var icon = dev.position.speed > 0 ? '🟢' : '🔴';
-            if (!window._clientMapMarkers[dev.id]) {
-              window._clientMapMarkers[dev.id] = L.marker(latLng, { title: dev.name });
+        var bounds = [];
+        vehicles.forEach(function(v) {
+          if (v.position && v.position.latitude && v.position.longitude) {
+            var latLng = [v.position.latitude, v.position.longitude];
+            bounds.push(latLng);
+            var spd = v.position.speed || 0;
+            if (spd > 2) moving++; else stopped++;
+
+            if (!window._clientMapMarkers[v.deviceId]) {
+              var marker = L.marker(latLng).addTo(window._clientMap);
+              marker.bindPopup('<strong>' + v.name + '</strong><br>Vel: ' + spd + ' km/h<br>' + (v.position.address || 'Aguardando...'));
+              window._clientMapMarkers[v.deviceId] = marker;
             } else {
-              window._clientMapMarkers[dev.id].setLatLng(latLng);
+              window._clientMapMarkers[v.deviceId].setLatLng(latLng);
+              window._clientMapMarkers[v.deviceId].setPopupContent('<strong>' + v.name + '</strong><br>Vel: ' + spd + ' km/h<br>' + (v.position.address || 'Aguardando...'));
             }
-            window._clientMapMarkers[dev.id].bindPopup(`<strong>${dev.name}</strong><br>Vel: ${Math.round(dev.position.speed)} km/h`);
-            window._clientMapMarkers[dev.id].addTo(window._clientMap);
-            if (dev.position.speed > 0) moving++; else stopped++;
           }
         });
-        document.getElementById('cmap-moving').textContent = moving;
-        document.getElementById('cmap-stopped').textContent = stopped;
+        var movEl = document.getElementById('cmap-moving');
+        var stopEl = document.getElementById('cmap-stopped');
+        if (movEl) movEl.textContent = moving;
+        if (stopEl) stopEl.textContent = stopped;
+        // Update total count
+        var totalEl = document.getElementById('cmap-total');
+        if (totalEl) totalEl.textContent = vehicles.length;
+        // Populate vehicle sidebar
+        var listEl = document.getElementById('client-vehicle-list');
+        if (listEl) {
+          var html = '';
+          vehicles.forEach(function(v) {
+            var spd = v.position ? (v.position.speed || 0) : 0;
+            var isMoving = spd > 2;
+            var statusColor = isMoving ? '#22c55e' : '#ef4444';
+            var statusText = isMoving ? 'Em movimento' : 'Parado';
+            var addr = v.position ? (v.position.address || 'Aguardando GPS...') : 'Sem sinal';
+            html += '<div onclick="focusClientVehicle(' + v.deviceId + ')" style="padding:10px;margin-bottom:6px;background:#0f172a;border-radius:8px;cursor:pointer;border:1px solid #334155;transition:border-color 0.2s;" onmouseover="this.style.borderColor=\'#6366f1\'" onmouseout="this.style.borderColor=\'#334155\'">';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+            html += '<strong style="color:#e2e8f0;font-size:13px;">' + v.name + '</strong>';
+            html += '<span style="font-size:11px;color:' + statusColor + ';">' + statusText + '</span>';
+            html += '</div>';
+            html += '<div style="color:#94a3b8;font-size:11px;margin-top:4px;">' + spd + ' km/h</div>';
+            html += '<div style="color:#64748b;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + addr + '</div>';
+            html += '</div>';
+          });
+          if (vehicles.length === 0) {
+            html = '<div style="text-align:center;color:#64748b;padding:20px;font-size:13px;">Nenhum veiculo encontrado</div>';
+          }
+          listEl.innerHTML = html;
+        }
+        // Fit map bounds
+        if (bounds.length > 0 && window._clientMap) {
+          try { window._clientMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 }); } catch(e) {}
+        }
       })
-      .catch(err => console.error('Error loading client map positions:', err));
+      .catch(function(err) { console.error('Error loading client positions:', err); });
     }
+
+    // Add focusClientVehicle function
+    function focusClientVehicle(deviceId) {
+      var marker = window._clientMapMarkers[deviceId];
+      if (marker && window._clientMap) {
+        window._clientMap.setView(marker.getLatLng(), 16);
+        marker.openPopup();
+      }
+    }
+
+    // Auto-refresh client map every 10 seconds
+    setInterval(function() {
+      if (window._clientMapInitialized && document.getElementById('page-admin') && !document.getElementById('page-admin').classList.contains('hidden')) {
+        loadClientMapPositions();
+      }
+    }, 10000);
 
     // ==================== ONBOARDING ====================
     function nextOnboardingStep() {
