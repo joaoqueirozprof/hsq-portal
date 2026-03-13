@@ -315,8 +315,8 @@ router.get('/reports/stops/:deviceId', async (req, res) => {
     const result = stops.map(s => ({
       startTime: s.startTime,
       endTime: s.endTime,
-      latitude: s.latitude,
-      longitude: s.longitude,
+      latitude: s.latitude || 0,
+      longitude: s.longitude || 0,
       address: s.address || '',
       duration: s.duration || 0,
       engineHours: s.engineHours || 0,

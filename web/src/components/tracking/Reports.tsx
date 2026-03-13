@@ -176,7 +176,7 @@ export default function Reports({ token, onClose }: ReportsProps) {
   };
 
   const formatDuration = (milliseconds: number): string => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
+    const totalSeconds = Math.floor((milliseconds ?? 0) / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
 
@@ -187,11 +187,11 @@ export default function Reports({ token, onClose }: ReportsProps) {
   };
 
   const formatDistance = (km: number): string => {
-    return `${km.toFixed(1)} km`;
+    return `${(km ?? 0).toFixed(1)} km`;
   };
 
   const formatSpeed = (speed: number): string => {
-    return `${speed.toFixed(1)} km/h`;
+    return `${(speed ?? 0).toFixed(1)} km/h`;
   };
 
   const getEventColor = (type: string): string => {
@@ -621,7 +621,7 @@ function StopsReport({
               <td style={tdStyle}>{formatDuration(stop.duration)}</td>
               <td style={tdStyle} title={stop.address}>{stop.address}</td>
               <td style={tdStyle}>
-                {stop.latitude.toFixed(6)}, {stop.longitude.toFixed(6)}
+                {(stop.latitude ?? 0).toFixed(6)}, {(stop.longitude ?? 0).toFixed(6)}
               </td>
             </tr>
           ))}
@@ -684,11 +684,11 @@ function SummaryReport({
       />
       <SummaryCard
         label="Horas de Motor"
-        value={summary.engineHours.toString()}
+        value={(summary.engineHours ?? 0).toString()}
       />
       <SummaryCard
         label="Combustível Gasto"
-        value={`${summary.spentFuel.toFixed(2)} L`}
+        value={`${(summary.spentFuel ?? 0).toFixed(2)} L`}
       />
     </div>
   );
