@@ -16,14 +16,19 @@ interface Vehicle {
 export default function ClientDashboard() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const { user, logout: doLogout } = useAuthStore();
 
   const loadVehicles = useCallback(async () => {
     try {
+      setError('');
       const { data } = await api.get('/tracking/devices');
       setVehicles(data.devices || []);
-    } catch {}
+    } catch (err: unknown) {
+      console.error('Failed to load vehicles:', err);
+      setError('Erro ao carregar veiculos. Tente recarregar a pagina.');
+    }
     setLoading(false);
   }, []);
 
@@ -105,6 +110,13 @@ export default function ClientDashboard() {
           animation: 'slideUp 0.6s ease-in-out',
         }}
       >
+        {error && (
+          <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#f87171', fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>{error}</span>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setLoading(true); loadVehicles(); }} style={{ fontSize: 12 }}>Tentar novamente</button>
+          </div>
+        )}
+
         {/* Stats */}
         <div
           style={{
