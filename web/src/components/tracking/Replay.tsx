@@ -130,9 +130,11 @@ export default function Replay({ token, onClose }: ReplayProps) {
     setToDate(toDateTime);
   }, []);
 
-  // Fetch devices on mount
+  // Fetch devices on mount with retry on 503/502
   useEffect(() => {
-    const fetchDevices = async () => {
+    let cancelled = false;
+    const fetchDevices = async (attempt = 0) => {
+      if (cancelled) return;
       try {
         const response = await fetch('/api/tracking/devices', {
           headers: {
@@ -140,22 +142,39 @@ export default function Replay({ token, onClose }: ReplayProps) {
           },
         });
 
+        if (response.status === 503 || response.status === 502) {
+          if (attempt < 3) {
+            setError('Reconectando ao servidor de rastreamento...');
+            setTimeout(() => fetchDevices(attempt + 1), 2000 * (attempt + 1));
+            return;
+          }
+          throw new Error('Servidor de rastreamento indisponível. Tente novamente.');
+        }
+
         if (!response.ok) throw new Error('Falha ao carregar dispositivos');
 
         const data = await response.json();
         const devicesList = data.devices || data;
         setDevices(devicesList);
+        setError(null);
         if (devicesList.length > 0) {
           setSelectedDevice(String(devicesList[0].deviceId));
         }
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Erro ao carregar dispositivos'
-        );
+        if (!cancelled) {
+          if (attempt < 3 && !(err instanceof TypeError && (err as any).message?.includes('Failed to fetch') === false)) {
+            setTimeout(() => fetchDevices(attempt + 1), 2000 * (attempt + 1));
+            return;
+          }
+          setError(
+            err instanceof Error ? err.message : 'Erro ao carregar dispositivos'
+          );
+        }
       }
     };
 
     fetchDevices();
+    return () => { cancelled = true; };
   }, [token]);
 
   // Cleanup playback on unmount

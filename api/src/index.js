@@ -18,6 +18,7 @@ const clientRoutes = require('./routes/clients');
 const adminRoutes = require('./routes/admin');
 const trackingRoutes = require('./routes/tracking');
 const geocodeRoutes = require('./routes/geocode');
+const { getTraccarService } = require('./services/traccar');
 
 // Setup process-level error handlers
 setupProcessHandlers();
@@ -315,6 +316,15 @@ app.listen(PORT, '0.0.0.0', async () => {
     await seed();
   } catch (err) {
     console.error('Seed failed:', err.message);
+  }
+
+  // Pre-warm the TraccarService singleton (used by all tracking routes)
+  try {
+    const traccar = getTraccarService(TRACCAR_URL);
+    await traccar.adminLogin();
+    console.log('[Startup] TraccarService singleton session ready');
+  } catch (err) {
+    console.error('[Startup] TraccarService pre-warm failed (will retry on first request):', err.message);
   }
 
   // Start Traccar bridge

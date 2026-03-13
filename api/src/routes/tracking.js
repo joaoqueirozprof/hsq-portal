@@ -1,24 +1,53 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/auth');
-const TraccarService = require('../services/traccar');
+const { getTraccarService } = require('../services/traccar');
 
 const router = express.Router();
 router.use(authMiddleware);
+
+// ====== HELPER: handle Traccar errors properly ======
+// If Traccar is unreachable or session fails, return 503 (service unavailable)
+// so the frontend knows it's a temporary issue and can retry
+function handleTraccarError(res, err, context) {
+  console.error(`${context} error:`, err.message);
+
+  // Connection/timeout errors → 503 Service Unavailable (frontend will retry)
+  if (err.isTraccarConnectionError || err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.message?.includes('timeout')) {
+    return res.status(503).json({
+      error: 'Servidor de rastreamento temporariamente indisponível. Tente novamente em alguns segundos.',
+      retryable: true,
+    });
+  }
+
+  // Traccar auth errors → 502 (our admin session with Traccar broke)
+  if (err.isTraccarAuthError) {
+    return res.status(502).json({
+      error: 'Erro de autenticação com servidor de rastreamento. Tente novamente.',
+      retryable: true,
+    });
+  }
+
+  // Generic server error
+  res.status(500).json({ error: 'Erro interno do servidor' });
+}
+
+// ====== HELPER: get TraccarService singleton ======
+function getTraccar(req) {
+  return getTraccarService(req.app.locals.traccarUrl);
+}
 
 // GET /api/tracking/positions - Get live positions
 // Admin sees all devices, clients see only their devices
 router.get('/positions', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
 
     let devices, positions;
 
     if (req.user.role === 'admin') {
-      // Admin sees everything
       devices = await traccar.getAllDevices();
       positions = await traccar.getPositions();
     } else {
-      // Client sees only their devices
       const traccarUserId = req.user.traccarUserId;
       if (!traccarUserId) {
         return res.json([]);
@@ -45,7 +74,6 @@ router.get('/positions', async (req, res) => {
         status: d.status,
         lastUpdate: d.lastUpdate,
         hasGps: hasPos,
-        // Flat position fields (what Tracking.tsx expects)
         latitude: pos ? pos.latitude : 0,
         longitude: pos ? pos.longitude : 0,
         speed: hasPos && pos.speed ? Math.round(pos.speed * 1.852) : 0,
@@ -59,15 +87,14 @@ router.get('/positions', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Tracking positions error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar posições' });
+    handleTraccarError(res, err, 'Tracking positions');
   }
 });
 
 // GET /api/tracking/devices - Simple device list (used by ClientDashboard)
 router.get('/devices', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
 
     let devices;
     if (req.user.role === 'admin') {
@@ -90,22 +117,20 @@ router.get('/devices', async (req, res) => {
 
     res.json({ devices: result });
   } catch (err) {
-    console.error('Tracking devices error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar dispositivos' });
+    handleTraccarError(res, err, 'Tracking devices');
   }
 });
 
 // GET /api/tracking/traccar-session - Create Traccar session and return token for auto-login
 router.get('/traccar-session', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     let email, password;
 
     if (req.user.role === 'admin') {
       email = process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com';
       password = process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!';
     } else {
-      // Client: look up the Traccar user credentials from our DB
       const db = req.app.locals.db;
       const client = await db.query(
         'SELECT traccar_user_id, document FROM clients WHERE id = $1',
@@ -121,7 +146,6 @@ router.get('/traccar-session', async (req, res) => {
       password = client.rows[0].document.replace(/[.\-\/]/g, '');
     }
 
-    // Create a Traccar session to get a token
     const axios = require('axios');
     const params = new URLSearchParams();
     params.append('email', email);
@@ -130,30 +154,25 @@ router.get('/traccar-session', async (req, res) => {
     const sessionResp = await axios.post(
       `${req.app.locals.traccarUrl}/api/session`,
       params,
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 }
     );
 
-    // Traccar returns user data with a token field
     const token = sessionResp.data.token;
     if (token) {
       return res.json({ token });
     }
 
-    // If no token in response, generate one via Traccar token endpoint
-    // Fallback: create a session token
     const cookies = sessionResp.headers['set-cookie'];
     const sessionCookie = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
 
-    // Try to get/create a user token
     try {
       const tokenResp = await axios.post(
         `${req.app.locals.traccarUrl}/api/session/token`,
         {},
-        { headers: { Cookie: sessionCookie } }
+        { headers: { Cookie: sessionCookie }, timeout: 10000 }
       );
       return res.json({ token: tokenResp.data.token || tokenResp.data });
     } catch {
-      // Token API not available, return email/password as fallback
       return res.json({ email, password, token: null });
     }
   } catch (err) {
@@ -165,10 +184,9 @@ router.get('/traccar-session', async (req, res) => {
 // GET /api/tracking/trail/:deviceId - Get position history for a device
 router.get('/trail/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
 
-    // Check access - non-admin can only see their own devices
     if (req.user.role !== 'admin') {
       const userDevices = await traccar.getUserDevices(req.user.traccarUserId);
       if (!userDevices.find(d => d.id === deviceId)) {
@@ -176,7 +194,6 @@ router.get('/trail/:deviceId', async (req, res) => {
       }
     }
 
-    // Get last 2 hours of positions
     const now = new Date();
     const from = new Date(now.getTime() - 2 * 60 * 60 * 1000);
     const positions = await traccar.request('GET',
@@ -192,16 +209,14 @@ router.get('/trail/:deviceId', async (req, res) => {
 
     res.json(trail);
   } catch (err) {
-    console.error('Trail error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar trilha' });
+    handleTraccarError(res, err, 'Trail');
   }
 });
 
 // ===================== ROUTE REPLAY =====================
-// GET /api/tracking/replay/:deviceId?from=ISO&to=ISO
 router.get('/replay/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
     const { from, to } = req.query;
 
@@ -209,7 +224,6 @@ router.get('/replay/:deviceId', async (req, res) => {
       return res.status(400).json({ error: 'Parâmetros from e to são obrigatórios (ISO 8601)' });
     }
 
-    // Check access
     if (req.user.role !== 'admin') {
       const userDevices = await traccar.getUserDevices(req.user.traccarUserId);
       if (!userDevices.find(d => d.id === deviceId)) {
@@ -235,16 +249,14 @@ router.get('/replay/:deviceId', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Replay error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar replay' });
+    handleTraccarError(res, err, 'Replay');
   }
 });
 
 // ===================== REPORTS =====================
-// GET /api/tracking/reports/trips/:deviceId?from=ISO&to=ISO
 router.get('/reports/trips/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
     const { from, to } = req.query;
 
@@ -269,8 +281,8 @@ router.get('/reports/trips/:deviceId', async (req, res) => {
       endLon: t.endLon,
       startAddress: t.startAddress || '',
       endAddress: t.endAddress || '',
-      distance: t.distance ? Math.round(t.distance / 1000 * 100) / 100 : 0, // km
-      duration: t.duration || 0, // ms
+      distance: t.distance ? Math.round(t.distance / 1000 * 100) / 100 : 0,
+      duration: t.duration || 0,
       averageSpeed: t.averageSpeed ? Math.round(t.averageSpeed * 1.852) : 0,
       maxSpeed: t.maxSpeed ? Math.round(t.maxSpeed * 1.852) : 0,
       spentFuel: t.spentFuel || 0,
@@ -278,15 +290,13 @@ router.get('/reports/trips/:deviceId', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Trips report error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar relatório de viagens' });
+    handleTraccarError(res, err, 'Trips report');
   }
 });
 
-// GET /api/tracking/reports/stops/:deviceId?from=ISO&to=ISO
 router.get('/reports/stops/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
     const { from, to } = req.query;
 
@@ -315,15 +325,13 @@ router.get('/reports/stops/:deviceId', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Stops report error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar relatório de paradas' });
+    handleTraccarError(res, err, 'Stops report');
   }
 });
 
-// GET /api/tracking/reports/summary/:deviceId?from=ISO&to=ISO
 router.get('/reports/summary/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
     const { from, to } = req.query;
 
@@ -352,15 +360,13 @@ router.get('/reports/summary/:deviceId', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Summary report error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar resumo' });
+    handleTraccarError(res, err, 'Summary report');
   }
 });
 
-// GET /api/tracking/reports/events/:deviceId?from=ISO&to=ISO&type=allEvents
 router.get('/reports/events/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
     const { from, to, type } = req.query;
 
@@ -386,49 +392,43 @@ router.get('/reports/events/:deviceId', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('Events report error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar eventos' });
+    handleTraccarError(res, err, 'Events report');
   }
 });
 
 // ===================== GEOFENCES =====================
-// GET /api/tracking/geofences
 router.get('/geofences', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const geofences = await traccar.request('GET', '/api/geofences');
     res.json(geofences);
   } catch (err) {
-    console.error('Geofences error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar geofences' });
+    handleTraccarError(res, err, 'Geofences');
   }
 });
 
-// POST /api/tracking/geofences
 router.post('/geofences', async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const { name, area, description } = req.body;
 
     const geofence = await traccar.request('POST', '/api/geofences', {
       name,
-      area, // WKT format: CIRCLE(lat lng, radius) or POLYGON((lat lng, lat lng, ...))
+      area,
       description: description || '',
     });
 
     res.json(geofence);
   } catch (err) {
-    console.error('Create geofence error:', err.message);
-    res.status(500).json({ error: 'Erro ao criar geofence' });
+    handleTraccarError(res, err, 'Create geofence');
   }
 });
 
-// PUT /api/tracking/geofences/:id
 router.put('/geofences/:id', async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const id = parseInt(req.params.id);
     const existing = await traccar.request('GET', `/api/geofences`);
     const gf = existing.find(g => g.id === id);
@@ -438,29 +438,25 @@ router.put('/geofences/:id', async (req, res) => {
     const updated = await traccar.request('PUT', `/api/geofences/${id}`, gf);
     res.json(updated);
   } catch (err) {
-    console.error('Update geofence error:', err.message);
-    res.status(500).json({ error: 'Erro ao atualizar geofence' });
+    handleTraccarError(res, err, 'Update geofence');
   }
 });
 
-// DELETE /api/tracking/geofences/:id
 router.delete('/geofences/:id', async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     await traccar.request('DELETE', `/api/geofences/${parseInt(req.params.id)}`);
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete geofence error:', err.message);
-    res.status(500).json({ error: 'Erro ao deletar geofence' });
+    handleTraccarError(res, err, 'Delete geofence');
   }
 });
 
-// POST /api/tracking/geofences/:id/link - Link geofence to device
 router.post('/geofences/:id/link', async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas admin' });
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const { deviceId } = req.body;
     await traccar.request('POST', '/api/permissions', {
       deviceId: parseInt(deviceId),
@@ -468,20 +464,17 @@ router.post('/geofences/:id/link', async (req, res) => {
     });
     res.json({ success: true });
   } catch (err) {
-    console.error('Link geofence error:', err.message);
-    res.status(500).json({ error: 'Erro ao vincular geofence' });
+    handleTraccarError(res, err, 'Link geofence');
   }
 });
 
 // ===================== REMOTE COMMANDS =====================
-// POST /api/tracking/commands/:deviceId - Send command to device
 router.post('/commands/:deviceId', async (req, res) => {
   try {
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccar = getTraccar(req);
     const deviceId = parseInt(req.params.deviceId);
-    const { type } = req.body; // 'engineStop', 'engineResume', 'fuelCut', 'fuelResume'
+    const { type } = req.body;
 
-    // Check access
     if (req.user.role !== 'admin') {
       const userDevices = await traccar.getUserDevices(req.user.traccarUserId);
       if (!userDevices.find(d => d.id === deviceId)) {
@@ -489,7 +482,6 @@ router.post('/commands/:deviceId', async (req, res) => {
       }
     }
 
-    // Map command types to Traccar command format
     const commandMap = {
       engineStop: { type: 'engineStop', attributes: {} },
       engineResume: { type: 'engineResume', attributes: {} },
@@ -508,17 +500,15 @@ router.post('/commands/:deviceId', async (req, res) => {
       attributes: cmd.attributes,
     });
 
-    // Log the command
     const db = req.app.locals.db;
     await db.query(
       'INSERT INTO audit_log (user_id, user_type, action, details) VALUES ($1, $2, $3, $4)',
       [req.user.id, req.user.role, 'vehicle_command', JSON.stringify({ deviceId, type, result: 'sent' })]
-    ).catch(() => {}); // Don't fail if audit log fails
+    ).catch(() => {});
 
     res.json({ success: true, message: `Comando ${type} enviado com sucesso`, result });
   } catch (err) {
-    console.error('Command error:', err.message);
-    res.status(500).json({ error: 'Erro ao enviar comando: ' + (err.response?.data?.message || err.message) });
+    handleTraccarError(res, err, 'Command');
   }
 });
 

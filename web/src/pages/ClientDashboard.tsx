@@ -20,16 +20,28 @@ export default function ClientDashboard() {
   const navigate = useNavigate();
   const { user, logout: doLogout } = useAuthStore();
 
-  const loadVehicles = useCallback(async () => {
+  const loadVehicles = useCallback(async (retryCount = 0) => {
     try {
       setError('');
       const { data } = await api.get('/tracking/devices');
       setVehicles(data.devices || []);
-    } catch (err: unknown) {
+      setLoading(false);
+    } catch (err: any) {
       console.error('Failed to load vehicles:', err);
+      const status = err?.response?.status;
+      const isRetryable = status === 503 || status === 502 || !err?.response;
+
+      if (isRetryable && retryCount < 3) {
+        // Auto-retry on server temporary errors (503/502/network)
+        console.log(`Retrying loadVehicles (attempt ${retryCount + 1}/3)...`);
+        setError('Reconectando ao servidor de rastreamento...');
+        setTimeout(() => loadVehicles(retryCount + 1), 2000 * (retryCount + 1));
+        return;
+      }
+
       setError('Erro ao carregar veiculos. Tente recarregar a pagina.');
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

@@ -233,10 +233,12 @@ export default function TrackingPage() {
     }
   }
 
-  // Initial load
+  // Initial load with retry on 503/502/network errors
   useEffect(() => {
     if (!token) return;
-    (async () => {
+    let cancelled = false;
+    const loadPositions = async (attempt = 0) => {
+      if (cancelled) return;
       try {
         const resp = await fetch('/api/tracking/positions', { headers: { Authorization: `Bearer ${token}` } });
         if (resp.ok) {
@@ -246,10 +248,24 @@ export default function TrackingPage() {
             setVehicles(vehs);
             geocodeVehicles(vehs);
           }
+          setLoading(false);
+        } else if ((resp.status === 503 || resp.status === 502) && attempt < 3) {
+          // Traccar temporarily unavailable, auto-retry
+          console.log(`Tracking positions: retrying (attempt ${attempt + 1}/3)...`);
+          setTimeout(() => loadPositions(attempt + 1), 2000 * (attempt + 1));
+        } else {
+          setLoading(false);
         }
-      } catch {}
-      setLoading(false);
-    })();
+      } catch {
+        if (attempt < 3) {
+          setTimeout(() => loadPositions(attempt + 1), 2000 * (attempt + 1));
+        } else {
+          setLoading(false);
+        }
+      }
+    };
+    loadPositions();
+    return () => { cancelled = true; };
   }, [token, geocodeVehicles]);
 
   // Fit bounds on first load

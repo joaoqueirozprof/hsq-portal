@@ -84,7 +84,7 @@ export default function Reports({ token, onClose }: ReportsProps) {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  const fetchDevices = async () => {
+  const fetchDevices = async (attempt = 0) => {
     try {
       const response = await fetch('/api/tracking/devices', {
         headers: {
@@ -92,17 +92,31 @@ export default function Reports({ token, onClose }: ReportsProps) {
         },
       });
 
+      if (response.status === 503 || response.status === 502) {
+        if (attempt < 3) {
+          setError('Reconectando ao servidor de rastreamento...');
+          setTimeout(() => fetchDevices(attempt + 1), 2000 * (attempt + 1));
+          return;
+        }
+        throw new Error('Servidor de rastreamento indisponível');
+      }
+
       if (!response.ok) {
         throw new Error('Falha ao carregar dispositivos');
       }
 
       const data = await response.json();
       setDevices(data.devices || []);
+      setError('');
 
       if (data.devices && data.devices.length > 0) {
         setSelectedDevice(data.devices[0].deviceId);
       }
     } catch (err) {
+      if (attempt < 3) {
+        setTimeout(() => fetchDevices(attempt + 1), 2000 * (attempt + 1));
+        return;
+      }
       setError('Erro ao carregar dispositivos');
       console.error(err);
     }
