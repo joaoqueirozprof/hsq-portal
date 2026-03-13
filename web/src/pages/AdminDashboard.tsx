@@ -7,6 +7,7 @@ import Modal from '@/components/ui/Modal';
 import Loading from '@/components/ui/Loading';
 import { maskDocument, maskPhone, cleanDocument } from '@/utils/masks';
 import { formatDateTime, timeAgo } from '@/utils/format';
+import { mapVehicleEmojis } from '@/utils/vehicleIcons';
 
 type AdminTab = 'dashboard' | 'clients' | 'devices' | 'online' | 'audit';
 
@@ -42,6 +43,7 @@ interface Device {
   lastUpdate?: string;
   category?: string;
   clientName?: string;
+  clientId?: string;
 }
 
 interface OnlineUser {
@@ -63,6 +65,25 @@ interface AuditEntry {
   user_name?: string;
 }
 
+// ========== VEHICLE CATEGORIES ==========
+const VEHICLE_CATEGORIES = [
+  { key: 'car', label: 'Carro' },
+  { key: 'truck', label: 'Caminhao' },
+  { key: 'motorcycle', label: 'Moto' },
+  { key: 'bus', label: 'Onibus' },
+  { key: 'van', label: 'Van' },
+  { key: 'pickup', label: 'Pickup' },
+  { key: 'tractor', label: 'Trator' },
+  { key: 'boat', label: 'Barco' },
+  { key: 'person', label: 'Pessoa' },
+  { key: 'animal', label: 'Animal' },
+];
+
+function getIconPreviewSvg(category: string, size = 28): string {
+  const svgTemplate = mapVehicleEmojis[category] || mapVehicleEmojis.car;
+  return svgTemplate.replace(/VW/g, String(size)).replace(/VH/g, String(size));
+}
+
 export default function AdminDashboard() {
   const [tab, setTab] = useState<AdminTab>('dashboard');
   const [stats, setStats] = useState<DashboardStats>({ totalClients: 0, activeClients: 0, recentLogins: 0, onlineNow: 0 });
@@ -73,6 +94,13 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [newClientOpen, setNewClientOpen] = useState(false);
+
+  // Device modal states
+  const [newDeviceOpen, setNewDeviceOpen] = useState(false);
+  const [assignDeviceOpen, setAssignDeviceOpen] = useState(false);
+  const [editIconOpen, setEditIconOpen] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+
   const navigate = useNavigate();
   const { user, logout: doLogout } = useAuthStore();
   const toast = useToastStore((s) => s.show);
@@ -161,6 +189,25 @@ export default function AdminDashboard() {
       loadClients(search);
       loadDashboard();
     } catch { toast('Erro ao deletar', 'error'); }
+  }
+
+  // ========== DEVICE ACTIONS ==========
+  async function unassignDevice(device: Device) {
+    if (!confirm(`Desvincular o dispositivo "${device.name}" do cliente "${device.clientName}"?`)) return;
+    try {
+      await api.post(`/admin/devices/${device.id}/unassign`, { clientId: device.clientId });
+      toast('Dispositivo desvinculado!', 'success');
+      loadDevices();
+    } catch { toast('Erro ao desvincular', 'error'); }
+  }
+
+  async function deleteDevice(device: Device) {
+    if (!confirm(`ATENCAO: Deseja DELETAR o dispositivo "${device.name}" (${device.uniqueId})?`)) return;
+    try {
+      await api.delete(`/admin/devices/${device.id}`);
+      toast('Dispositivo deletado!', 'success');
+      loadDevices();
+    } catch { toast('Erro ao deletar dispositivo', 'error'); }
   }
 
   if (loading) return <Loading fullScreen message="Carregando painel..." />;
@@ -328,39 +375,94 @@ export default function AdminDashboard() {
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ color: 'var(--text-primary)', fontSize: 16 }}>Dispositivos Traccar</h3>
-              <button className="btn btn-primary btn-sm" onClick={() => toast('Funcionalidade em breve', 'info')}>+ Novo Dispositivo</button>
+              <button className="btn btn-primary btn-sm" onClick={() => setNewDeviceOpen(true)}>+ Novo Dispositivo</button>
             </div>
             <div className="table-container">
               <table>
                 <thead>
                   <tr>
+                    <th>Icone</th>
                     <th>ID</th>
                     <th>Nome</th>
-                    <th>Identificador</th>
+                    <th>IMEI</th>
                     <th>Status</th>
                     <th>Ultima Atualizacao</th>
                     <th>Cliente</th>
+                    <th>Acoes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {devices.length === 0 ? (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 40 }}>Nenhum dispositivo</td></tr>
-                  ) : devices.map((d) => (
-                    <tr key={d.id}>
-                      <td>{d.id}</td>
-                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{d.name}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{d.uniqueId}</td>
-                      <td>
-                        <span className={`badge ${d.status === 'online' ? 'badge-active' : 'badge-inactive'}`}>
-                          {d.status || 'offline'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                        {d.lastUpdate ? formatDateTime(d.lastUpdate) : '-'}
-                      </td>
-                      <td>{d.clientName || '-'}</td>
-                    </tr>
-                  ))}
+                    <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-dim)', padding: 40 }}>Nenhum dispositivo</td></tr>
+                  ) : devices.map((d) => {
+                    const cat = d.category || 'car';
+                    const catLabel = VEHICLE_CATEGORIES.find(c => c.key === cat)?.label || cat;
+                    return (
+                      <tr key={d.id}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div
+                              style={{
+                                width: 36, height: 36, borderRadius: '50%',
+                                background: d.status === 'online' ? '#10b981' : '#ef4444',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                              dangerouslySetInnerHTML={{ __html: getIconPreviewSvg(cat, 22) }}
+                            />
+                            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{catLabel}</span>
+                          </div>
+                        </td>
+                        <td>{d.id}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{d.name}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{d.uniqueId}</td>
+                        <td>
+                          <span className={`badge ${d.status === 'online' ? 'badge-active' : 'badge-inactive'}`}>
+                            {d.status || 'offline'}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                          {d.lastUpdate ? formatDateTime(d.lastUpdate) : '-'}
+                        </td>
+                        <td>{d.clientName || <span style={{ color: 'var(--text-dim)' }}>Sem vinculo</span>}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              title="Alterar icone"
+                              onClick={() => { setSelectedDevice(d); setEditIconOpen(true); }}
+                            >
+                              Icone
+                            </button>
+                            {d.clientName ? (
+                              <button
+                                className="btn btn-sm btn-danger"
+                                title="Desvincular do cliente"
+                                onClick={() => unassignDevice(d)}
+                              >
+                                Desvincular
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-sm btn-primary"
+                                title="Vincular a um cliente"
+                                onClick={() => { setSelectedDevice(d); setAssignDeviceOpen(true); }}
+                              >
+                                Vincular
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-sm btn-danger"
+                              title="Deletar dispositivo"
+                              onClick={() => deleteDevice(d)}
+                            >
+                              Deletar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -413,6 +515,31 @@ export default function AdminDashboard() {
         isOpen={newClientOpen}
         onClose={() => setNewClientOpen(false)}
         onSuccess={() => { loadClients(search); loadDashboard(); setNewClientOpen(false); }}
+      />
+
+      {/* New Device Modal */}
+      <NewDeviceModal
+        isOpen={newDeviceOpen}
+        onClose={() => setNewDeviceOpen(false)}
+        onSuccess={() => { loadDevices(); setNewDeviceOpen(false); }}
+        clients={clients}
+      />
+
+      {/* Assign Device Modal */}
+      <AssignDeviceModal
+        isOpen={assignDeviceOpen}
+        device={selectedDevice}
+        onClose={() => { setAssignDeviceOpen(false); setSelectedDevice(null); }}
+        onSuccess={() => { loadDevices(); setAssignDeviceOpen(false); setSelectedDevice(null); }}
+        clients={clients}
+      />
+
+      {/* Edit Icon Modal */}
+      <EditIconModal
+        isOpen={editIconOpen}
+        device={selectedDevice}
+        onClose={() => { setEditIconOpen(false); setSelectedDevice(null); }}
+        onSuccess={() => { loadDevices(); setEditIconOpen(false); setSelectedDevice(null); }}
       />
     </div>
   );
@@ -468,6 +595,49 @@ function OnlineUsersPanel({ users }: { users: OnlineUser[] }) {
   );
 }
 
+// ========== ICON PICKER ==========
+function IconPicker({ selected, onSelect }: { selected: string; onSelect: (key: string) => void }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8,
+    }}>
+      {VEHICLE_CATEGORIES.map((cat) => {
+        const isActive = selected === cat.key;
+        return (
+          <button
+            key={cat.key}
+            type="button"
+            onClick={() => onSelect(cat.key)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              padding: '10px 4px', borderRadius: 10,
+              border: isActive ? '2px solid var(--accent-blue)' : '2px solid var(--border)',
+              background: isActive ? 'rgba(59,130,246,0.15)' : 'rgba(15,23,42,0.4)',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            <div
+              style={{
+                width: 40, height: 40, borderRadius: '50%',
+                background: isActive ? '#10b981' : '#475569',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              dangerouslySetInnerHTML={{ __html: getIconPreviewSvg(cat.key, 26) }}
+            />
+            <span style={{
+              fontSize: 11, fontWeight: isActive ? 700 : 500,
+              color: isActive ? 'var(--accent-blue)' : 'var(--text-muted)',
+            }}>
+              {cat.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ========== NEW CLIENT MODAL ==========
 function NewClientModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose: () => void; onSuccess: () => void }) {
   const [docType, setDocType] = useState<'CPF' | 'CNPJ'>('CPF');
   const [doc, setDoc] = useState('');
@@ -562,6 +732,247 @@ function NewClientModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClo
           <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
           <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
             {loading ? <><span className="spinner" /> Cadastrando...</> : 'Cadastrar Cliente'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ========== NEW DEVICE MODAL ==========
+function NewDeviceModal({
+  isOpen, onClose, onSuccess, clients,
+}: {
+  isOpen: boolean; onClose: () => void; onSuccess: () => void; clients: Client[];
+}) {
+  const [name, setName] = useState('');
+  const [uniqueId, setUniqueId] = useState('');
+  const [category, setCategory] = useState('car');
+  const [clientId, setClientId] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const toast = useToastStore((s) => s.show);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !uniqueId.trim()) {
+      setError('Nome e IMEI sao obrigatorios');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await api.post('/admin/devices', {
+        name: name.trim(),
+        uniqueId: uniqueId.trim(),
+        category,
+        clientId: clientId || undefined,
+      });
+      toast('Dispositivo criado com sucesso!', 'success');
+      onSuccess();
+      setName(''); setUniqueId(''); setCategory('car'); setClientId('');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao criar dispositivo');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Novo Dispositivo" width={540}>
+      {error && <div className="error-msg">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Nome do Veiculo *</label>
+          <input
+            className="form-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ex: Caminhao Azul, Moto do Joao..."
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label>IMEI / Identificador *</label>
+          <input
+            className="form-input"
+            value={uniqueId}
+            onChange={(e) => setUniqueId(e.target.value.replace(/\D/g, ''))}
+            placeholder="Numero IMEI do rastreador (somente numeros)"
+            required
+            style={{ fontFamily: 'monospace' }}
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Tipo de Veiculo</label>
+          <IconPicker selected={category} onSelect={setCategory} />
+        </div>
+
+        <div className="form-group">
+          <label>Vincular a Cliente (opcional)</label>
+          <select
+            className="form-select"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+          >
+            <option value="">-- Sem vinculo --</option>
+            {clients.filter(c => c.is_active).map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.document})</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
+            {loading ? <><span className="spinner" /> Criando...</> : 'Criar Dispositivo'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ========== ASSIGN DEVICE MODAL ==========
+function AssignDeviceModal({
+  isOpen, device, onClose, onSuccess, clients,
+}: {
+  isOpen: boolean; device: Device | null; onClose: () => void; onSuccess: () => void; clients: Client[];
+}) {
+  const [clientId, setClientId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToastStore((s) => s.show);
+
+  useEffect(() => {
+    if (isOpen) { setClientId(''); setError(''); }
+  }, [isOpen]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!clientId || !device) {
+      setError('Selecione um cliente');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await api.post(`/admin/devices/${device.id}/assign`, { clientId });
+      toast(`Dispositivo "${device.name}" vinculado com sucesso!`, 'success');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao vincular');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!device) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Vincular Dispositivo" width={480}>
+      {error && <div className="error-msg">{error}</div>}
+
+      <div style={{
+        background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+        borderRadius: 10, padding: 16, marginBottom: 20,
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <div
+          style={{
+            width: 44, height: 44, borderRadius: '50%',
+            background: device.status === 'online' ? '#10b981' : '#ef4444',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}
+          dangerouslySetInnerHTML={{ __html: getIconPreviewSvg(device.category || 'car', 28) }}
+        />
+        <div>
+          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15 }}>{device.name}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace' }}>IMEI: {device.uniqueId}</div>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Selecione o Cliente *</label>
+          <select
+            className="form-select"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            required
+          >
+            <option value="">-- Escolha um cliente --</option>
+            {clients.filter(c => c.is_active).map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.document})</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
+            {loading ? <><span className="spinner" /> Vinculando...</> : 'Vincular'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ========== EDIT ICON MODAL ==========
+function EditIconModal({
+  isOpen, device, onClose, onSuccess,
+}: {
+  isOpen: boolean; device: Device | null; onClose: () => void; onSuccess: () => void;
+}) {
+  const [category, setCategory] = useState('car');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToastStore((s) => s.show);
+
+  useEffect(() => {
+    if (isOpen && device) {
+      setCategory(device.category || 'car');
+      setError('');
+    }
+  }, [isOpen, device]);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!device) return;
+    setError('');
+    setLoading(true);
+    try {
+      await api.put(`/admin/devices/${device.id}`, { category });
+      toast(`Icone de "${device.name}" atualizado!`, 'success');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao atualizar icone');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!device) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Alterar Icone" width={480}>
+      {error && <div className="error-msg">{error}</div>}
+
+      <div style={{ textAlign: 'center', marginBottom: 16 }}>
+        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 15 }}>{device.name}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'monospace' }}>IMEI: {device.uniqueId}</div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Escolha o Icone</label>
+          <IconPicker selected={category} onSelect={setCategory} />
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} style={{ flex: 1 }}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
+            {loading ? <><span className="spinner" /> Salvando...</> : 'Salvar Icone'}
           </button>
         </div>
       </form>

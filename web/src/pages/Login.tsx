@@ -30,62 +30,227 @@ export default function LoginPage({ adminMode = false }: LoginPageProps) {
   const login = useAuthStore((s) => s.login);
   const toast = useToastStore((s) => s.show);
 
-  // Animated background
+  // Full animated city background with roads, vehicles, GPS pins, city blocks
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     let animId: number;
-    const particles: Array<{ x: number; y: number; vx: number; vy: number; size: number; alpha: number }> = [];
+    let W = 0, H = 0;
+
+    // Roads (horizontal and vertical lines)
+    interface Road { x1: number; y1: number; x2: number; y2: number; }
+    let roads: Road[] = [];
+
+    // Moving vehicles on roads
+    interface Vehicle { x: number; y: number; speed: number; road: number; progress: number; color: string; size: number; }
+    let vehicles: Vehicle[] = [];
+
+    // GPS pin markers that pulse
+    interface GpsPin { x: number; y: number; pulse: number; pulseDir: number; color: string; }
+    let pins: GpsPin[] = [];
+
+    // City blocks (darker rectangles)
+    interface Block { x: number; y: number; w: number; h: number; alpha: number; }
+    let blocks: Block[] = [];
+
+    // Floating particles (network dots)
+    interface Particle { x: number; y: number; vx: number; vy: number; size: number; alpha: number; }
+    let particles: Particle[] = [];
+
+    function initScene() {
+      W = canvas!.width;
+      H = canvas!.height;
+      roads = [];
+      vehicles = [];
+      pins = [];
+      blocks = [];
+      particles = [];
+
+      // Create grid of roads
+      const gridSpacing = 120;
+      // Horizontal roads
+      for (let y = gridSpacing; y < H; y += gridSpacing) {
+        roads.push({ x1: 0, y1: y, x2: W, y2: y });
+      }
+      // Vertical roads
+      for (let x = gridSpacing; x < W; x += gridSpacing) {
+        roads.push({ x1: x, y1: 0, x2: x, y2: H });
+      }
+
+      // Create vehicles on random roads
+      const vColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+      for (let i = 0; i < Math.min(roads.length, 20); i++) {
+        const ri = Math.floor(Math.random() * roads.length);
+        vehicles.push({
+          x: 0, y: 0,
+          speed: 0.2 + Math.random() * 0.8,
+          road: ri,
+          progress: Math.random(),
+          color: vColors[Math.floor(Math.random() * vColors.length)],
+          size: 3 + Math.random() * 3,
+        });
+      }
+
+      // City blocks between roads
+      const hRoads = roads.filter(r => r.y1 === r.y2).sort((a, b) => a.y1 - b.y1);
+      const vRoads = roads.filter(r => r.x1 === r.x2).sort((a, b) => a.x1 - b.x1);
+      for (let i = 0; i < hRoads.length - 1; i++) {
+        for (let j = 0; j < vRoads.length - 1; j++) {
+          if (Math.random() > 0.6) {
+            blocks.push({
+              x: vRoads[j].x1 + 8,
+              y: hRoads[i].y1 + 8,
+              w: (vRoads[j + 1].x1 - vRoads[j].x1) - 16,
+              h: (hRoads[i + 1].y1 - hRoads[i].y1) - 16,
+              alpha: 0.03 + Math.random() * 0.06,
+            });
+          }
+        }
+      }
+
+      // GPS pins at road intersections
+      const pinCount = Math.min(8, Math.floor(W * H / 80000));
+      for (let i = 0; i < pinCount; i++) {
+        const hR = hRoads[Math.floor(Math.random() * hRoads.length)];
+        const vR = vRoads[Math.floor(Math.random() * vRoads.length)];
+        if (hR && vR) {
+          pins.push({
+            x: vR.x1, y: hR.y1,
+            pulse: Math.random() * Math.PI * 2,
+            pulseDir: 0.03 + Math.random() * 0.02,
+            color: Math.random() > 0.5 ? '#10b981' : '#ef4444',
+          });
+        }
+      }
+
+      // Floating network particles
+      for (let i = 0; i < 30; i++) {
+        particles.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: (Math.random() - 0.5) * 0.4,
+          vy: (Math.random() - 0.5) * 0.4,
+          size: Math.random() * 1.5 + 0.5,
+          alpha: Math.random() * 0.2 + 0.05,
+        });
+      }
+    }
 
     function resize() {
       canvas!.width = window.innerWidth;
       canvas!.height = window.innerHeight;
+      initScene();
     }
     resize();
     window.addEventListener('resize', resize);
 
-    for (let i = 0; i < 50; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        size: Math.random() * 2 + 1,
-        alpha: Math.random() * 0.3 + 0.1,
-      });
-    }
-
     function draw() {
-      ctx!.clearRect(0, 0, canvas!.width, canvas!.height);
-      particles.forEach((p) => {
+      ctx!.clearRect(0, 0, W, H);
+
+      // Draw city blocks
+      blocks.forEach(b => {
+        ctx!.fillStyle = `rgba(65, 131, 239, ${b.alpha})`;
+        ctx!.fillRect(b.x, b.y, b.w, b.h);
+      });
+
+      // Draw roads
+      roads.forEach(r => {
+        ctx!.beginPath();
+        ctx!.moveTo(r.x1, r.y1);
+        ctx!.lineTo(r.x2, r.y2);
+        ctx!.strokeStyle = 'rgba(65, 131, 239, 0.08)';
+        ctx!.lineWidth = 2;
+        ctx!.stroke();
+        // Center dashes
+        ctx!.beginPath();
+        ctx!.setLineDash([8, 12]);
+        ctx!.moveTo(r.x1, r.y1);
+        ctx!.lineTo(r.x2, r.y2);
+        ctx!.strokeStyle = 'rgba(65, 131, 239, 0.04)';
+        ctx!.lineWidth = 1;
+        ctx!.stroke();
+        ctx!.setLineDash([]);
+      });
+
+      // Move & draw vehicles
+      vehicles.forEach(v => {
+        const r = roads[v.road];
+        if (!r) return;
+        v.progress += v.speed * 0.002;
+        if (v.progress > 1) v.progress = 0;
+        v.x = r.x1 + (r.x2 - r.x1) * v.progress;
+        v.y = r.y1 + (r.y2 - r.y1) * v.progress;
+
+        // Glow
+        const grd = ctx!.createRadialGradient(v.x, v.y, 0, v.x, v.y, v.size * 4);
+        grd.addColorStop(0, v.color + '40');
+        grd.addColorStop(1, v.color + '00');
+        ctx!.fillStyle = grd;
+        ctx!.beginPath();
+        ctx!.arc(v.x, v.y, v.size * 4, 0, Math.PI * 2);
+        ctx!.fill();
+
+        // Vehicle dot
+        ctx!.beginPath();
+        ctx!.arc(v.x, v.y, v.size, 0, Math.PI * 2);
+        ctx!.fillStyle = v.color;
+        ctx!.fill();
+      });
+
+      // Draw GPS pins
+      pins.forEach(p => {
+        p.pulse += p.pulseDir;
+        const pulseScale = 0.5 + Math.sin(p.pulse) * 0.5;
+
+        // Pulse ring
+        ctx!.beginPath();
+        ctx!.arc(p.x, p.y, 8 + pulseScale * 14, 0, Math.PI * 2);
+        ctx!.strokeStyle = p.color + Math.round(30 * (1 - pulseScale)).toString(16).padStart(2, '0');
+        ctx!.lineWidth = 1.5;
+        ctx!.stroke();
+
+        // Pin body
+        ctx!.beginPath();
+        ctx!.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx!.fillStyle = p.color;
+        ctx!.fill();
+        ctx!.beginPath();
+        ctx!.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        ctx!.fillStyle = '#ffffff40';
+        ctx!.fill();
+      });
+
+      // Floating particles + connections
+      particles.forEach(p => {
         p.x += p.vx;
         p.y += p.vy;
-        if (p.x < 0) p.x = canvas!.width;
-        if (p.x > canvas!.width) p.x = 0;
-        if (p.y < 0) p.y = canvas!.height;
-        if (p.y > canvas!.height) p.y = 0;
+        if (p.x < 0) p.x = W;
+        if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H;
+        if (p.y > H) p.y = 0;
         ctx!.beginPath();
         ctx!.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx!.fillStyle = `rgba(65, 131, 239, ${p.alpha})`;
         ctx!.fill();
       });
-      // Draw connections
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 150) {
+          if (dist < 120) {
             ctx!.beginPath();
             ctx!.moveTo(particles[i].x, particles[i].y);
             ctx!.lineTo(particles[j].x, particles[j].y);
-            ctx!.strokeStyle = `rgba(65, 131, 239, ${0.1 * (1 - dist / 150)})`;
+            ctx!.strokeStyle = `rgba(65, 131, 239, ${0.08 * (1 - dist / 120)})`;
+            ctx!.lineWidth = 0.5;
             ctx!.stroke();
           }
         }
       }
+
       animId = requestAnimationFrame(draw);
     }
     draw();

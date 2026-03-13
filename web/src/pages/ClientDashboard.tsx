@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth';
 import api from '@/api/client';
 import Loading from '@/components/ui/Loading';
+import { mapVehicleEmojis } from '@/utils/vehicleIcons';
 
 interface Vehicle {
   deviceId: number;
@@ -43,6 +44,34 @@ export default function ClientDashboard() {
 
   async function openTraccar() {
     const traccarUrl = 'https://traccar.hsqrastreamento.com.br';
+    // Try to auto-login via Traccar session API first
+    try {
+      // Get Traccar credentials from our backend (proxied)
+      const { data } = await api.get('/tracking/traccar-session');
+      if (data.email && data.password) {
+        // Create a hidden form to POST to Traccar /api/session (sets JSESSIONID cookie)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `${traccarUrl}/api/session`;
+        form.target = '_blank';
+        const emailField = document.createElement('input');
+        emailField.type = 'hidden';
+        emailField.name = 'email';
+        emailField.value = data.email;
+        form.appendChild(emailField);
+        const passField = document.createElement('input');
+        passField.type = 'hidden';
+        passField.name = 'password';
+        passField.value = data.password;
+        form.appendChild(passField);
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+        return;
+      }
+    } catch {
+      // Fallback: open Traccar login page directly
+    }
     window.open(traccarUrl, '_blank');
   }
 
@@ -118,7 +147,17 @@ export default function ClientDashboard() {
                   borderRadius: 10, border: '1px solid var(--border)',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 24 }}>{v.category === 'truck' ? '🚛' : v.category === 'motorcycle' ? '🏍️' : '🚗'}</span>
+                    <div
+                      style={{
+                        width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                        background: v.status === 'online' ? '#10b981' : '#ef4444',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: (mapVehicleEmojis[v.category || 'car'] || mapVehicleEmojis.car)
+                          .replace(/VW/g, '24').replace(/VH/g, '24'),
+                      }}
+                    />
                     <div>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{v.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
