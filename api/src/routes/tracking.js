@@ -33,10 +33,9 @@ router.get('/positions', async (req, res) => {
       posMap[p.deviceId] = p;
     }
 
-    // Combine devices with positions - show ALL devices even without position
+    // Combine devices with positions - FLAT format for frontend Tracking.tsx
     const result = devices.map(d => {
       const pos = posMap[d.id];
-      // Use device's own lastUpdate lat/lng if no live position available
       const hasPos = pos && (pos.latitude !== 0 || pos.longitude !== 0);
       return {
         deviceId: d.id,
@@ -45,29 +44,16 @@ router.get('/positions', async (req, res) => {
         category: d.category || 'car',
         status: d.status,
         lastUpdate: d.lastUpdate,
-        position: hasPos ? {
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          speed: pos.speed ? Math.round(pos.speed * 1.852) : 0, // knots to km/h
-          course: pos.course || 0,
-          altitude: pos.altitude || 0,
-          address: pos.address || null,
-          fixTime: pos.fixTime,
-          accuracy: pos.accuracy || 0,
-          attributes: pos.attributes || {},
-        } : (pos ? {
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          speed: 0,
-          course: 0,
-          altitude: 0,
-          address: 'Aguardando sinal GPS...',
-          fixTime: pos.fixTime || d.lastUpdate,
-          accuracy: 0,
-          attributes: {},
-          noGps: true,
-        } : null),
         hasGps: hasPos,
+        // Flat position fields (what Tracking.tsx expects)
+        latitude: pos ? pos.latitude : 0,
+        longitude: pos ? pos.longitude : 0,
+        speed: hasPos && pos.speed ? Math.round(pos.speed * 1.852) : 0,
+        course: pos ? (pos.course || 0) : 0,
+        altitude: pos ? (pos.altitude || 0) : 0,
+        address: hasPos ? (pos.address || null) : (pos ? 'Aguardando sinal GPS...' : null),
+        fixTime: pos ? (pos.fixTime || d.lastUpdate) : null,
+        accuracy: pos ? (pos.accuracy || 0) : 0,
       };
     });
 
@@ -109,40 +95,70 @@ router.get('/devices', async (req, res) => {
   }
 });
 
-// GET /api/tracking/traccar-session - Get Traccar credentials for auto-login
+// GET /api/tracking/traccar-session - Create Traccar session and return token for auto-login
 router.get('/traccar-session', async (req, res) => {
   try {
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    let email, password;
+
     if (req.user.role === 'admin') {
-      // Admin uses the main Traccar admin account
-      return res.json({
-        email: process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com',
-        password: process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!',
-      });
+      email = process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com';
+      password = process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!';
+    } else {
+      // Client: look up the Traccar user credentials from our DB
+      const db = req.app.locals.db;
+      const client = await db.query(
+        'SELECT traccar_user_id, document FROM clients WHERE id = $1',
+        [req.user.id]
+      );
+
+      if (client.rows.length === 0 || !client.rows[0].traccar_user_id) {
+        return res.json({ token: null });
+      }
+
+      const traccarUser = await traccar.request('GET', `/api/users/${client.rows[0].traccar_user_id}`);
+      email = traccarUser.email;
+      password = client.rows[0].document.replace(/[.\-\/]/g, '');
     }
 
-    // Client: look up the Traccar user credentials from our DB
-    const db = req.app.locals.db;
-    const client = await db.query(
-      'SELECT traccar_user_id, document FROM clients WHERE id = $1',
-      [req.user.id]
+    // Create a Traccar session to get a token
+    const axios = require('axios');
+    const params = new URLSearchParams();
+    params.append('email', email);
+    params.append('password', password);
+
+    const sessionResp = await axios.post(
+      `${req.app.locals.traccarUrl}/api/session`,
+      params,
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
 
-    if (client.rows.length === 0 || !client.rows[0].traccar_user_id) {
-      return res.json({ email: null, password: null });
+    // Traccar returns user data with a token field
+    const token = sessionResp.data.token;
+    if (token) {
+      return res.json({ token });
     }
 
-    // Get Traccar user email
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
-    const traccarUser = await traccar.request('GET', `/api/users/${client.rows[0].traccar_user_id}`);
+    // If no token in response, generate one via Traccar token endpoint
+    // Fallback: create a session token
+    const cookies = sessionResp.headers['set-cookie'];
+    const sessionCookie = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
 
-    // The password is set to the client's document (CPF/CNPJ) by default
-    res.json({
-      email: traccarUser.email,
-      password: client.rows[0].document.replace(/[.\-\/]/g, ''),
-    });
+    // Try to get/create a user token
+    try {
+      const tokenResp = await axios.post(
+        `${req.app.locals.traccarUrl}/api/session/token`,
+        {},
+        { headers: { Cookie: sessionCookie } }
+      );
+      return res.json({ token: tokenResp.data.token || tokenResp.data });
+    } catch {
+      // Token API not available, return email/password as fallback
+      return res.json({ email, password, token: null });
+    }
   } catch (err) {
     console.error('Traccar session error:', err.message);
-    res.json({ email: null, password: null });
+    res.json({ token: null });
   }
 });
 

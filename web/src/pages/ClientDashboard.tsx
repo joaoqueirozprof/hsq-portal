@@ -44,15 +44,19 @@ export default function ClientDashboard() {
 
   async function openTraccar() {
     const traccarUrl = 'https://traccar.hsqrastreamento.com.br';
-    // Try to auto-login via Traccar session API first
     try {
-      // Get Traccar credentials from our backend (proxied)
+      // Backend creates a Traccar session and returns a token
       const { data } = await api.get('/tracking/traccar-session');
+      if (data.token) {
+        // Open Traccar with token-based auto-login
+        window.open(`${traccarUrl}/?token=${encodeURIComponent(data.token)}`, '_blank');
+        return;
+      }
+      // Fallback: if we got email/password but no token, try form POST via proxy
       if (data.email && data.password) {
-        // Create a hidden form to POST to Traccar /api/session (sets JSESSIONID cookie)
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = `${traccarUrl}/api/session`;
+        form.action = '/api/traccar-proxy/session';
         form.target = '_blank';
         const emailField = document.createElement('input');
         emailField.type = 'hidden';
