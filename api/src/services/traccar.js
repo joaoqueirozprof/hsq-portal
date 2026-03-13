@@ -31,13 +31,15 @@ class TraccarService {
     }
   }
 
-  async request(method, path, data = null) {
+  async request(method, path, data = null, options = {}) {
     await this.ensureSession();
+    const timeout = options.timeout || 30000; // default 30s, reports use longer
     try {
       const config = {
         method,
         url: `${this.baseUrl}${path}`,
         headers: { Cookie: this.adminSession },
+        timeout,
       };
       if (data) config.data = data;
       const resp = await axios(config);
@@ -50,6 +52,7 @@ class TraccarService {
           method,
           url: `${this.baseUrl}${path}`,
           headers: { Cookie: this.adminSession },
+          timeout,
         };
         if (data) config.data = data;
         const resp = await axios(config);

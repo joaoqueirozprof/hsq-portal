@@ -218,7 +218,8 @@ router.get('/replay/:deviceId', async (req, res) => {
     }
 
     const positions = await traccar.request('GET',
-      `/api/positions?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      `/api/positions?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      null, { timeout: 120000 }
     );
 
     const result = positions.map(p => ({
@@ -255,7 +256,8 @@ router.get('/reports/trips/:deviceId', async (req, res) => {
     }
 
     const trips = await traccar.request('GET',
-      `/api/reports/trips?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      `/api/reports/trips?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      null, { timeout: 120000 }
     );
 
     const result = trips.map(t => ({
@@ -296,7 +298,8 @@ router.get('/reports/stops/:deviceId', async (req, res) => {
     }
 
     const stops = await traccar.request('GET',
-      `/api/reports/stops?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      `/api/reports/stops?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      null, { timeout: 120000 }
     );
 
     const result = stops.map(s => ({
@@ -332,7 +335,8 @@ router.get('/reports/summary/:deviceId', async (req, res) => {
     }
 
     const summary = await traccar.request('GET',
-      `/api/reports/summary?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+      `/api/reports/summary?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      null, { timeout: 120000 }
     );
 
     const result = summary.map(s => ({
@@ -369,7 +373,8 @@ router.get('/reports/events/:deviceId', async (req, res) => {
 
     const eventType = type || 'allEvents';
     const events = await traccar.request('GET',
-      `/api/reports/events?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&type=${eventType}`
+      `/api/reports/events?deviceId=${deviceId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&type=${eventType}`,
+      null, { timeout: 120000 }
     );
 
     const result = events.map(e => ({
