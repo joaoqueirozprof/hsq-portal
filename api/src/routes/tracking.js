@@ -468,4 +468,53 @@ router.post('/geofences/:id/link', async (req, res) => {
   }
 });
 
+// ===================== REMOTE COMMANDS =====================
+// POST /api/tracking/commands/:deviceId - Send command to device
+router.post('/commands/:deviceId', async (req, res) => {
+  try {
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const deviceId = parseInt(req.params.deviceId);
+    const { type } = req.body; // 'engineStop', 'engineResume', 'fuelCut', 'fuelResume'
+
+    // Check access
+    if (req.user.role !== 'admin') {
+      const userDevices = await traccar.getUserDevices(req.user.traccarUserId);
+      if (!userDevices.find(d => d.id === deviceId)) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
+    }
+
+    // Map command types to Traccar command format
+    const commandMap = {
+      engineStop: { type: 'engineStop', attributes: {} },
+      engineResume: { type: 'engineResume', attributes: {} },
+      fuelCut: { type: 'custom', attributes: { data: 'relay,1#' } },
+      fuelResume: { type: 'custom', attributes: { data: 'relay,0#' } },
+    };
+
+    const cmd = commandMap[type];
+    if (!cmd) {
+      return res.status(400).json({ error: 'Tipo de comando inválido. Use: engineStop, engineResume, fuelCut, fuelResume' });
+    }
+
+    const result = await traccar.request('POST', '/api/commands/send', {
+      deviceId,
+      type: cmd.type,
+      attributes: cmd.attributes,
+    });
+
+    // Log the command
+    const db = req.app.locals.db;
+    await db.query(
+      'INSERT INTO audit_log (user_id, user_type, action, details) VALUES ($1, $2, $3, $4)',
+      [req.user.id, req.user.role, 'vehicle_command', JSON.stringify({ deviceId, type, result: 'sent' })]
+    ).catch(() => {}); // Don't fail if audit log fails
+
+    res.json({ success: true, message: `Comando ${type} enviado com sucesso`, result });
+  } catch (err) {
+    console.error('Command error:', err.message);
+    res.status(500).json({ error: 'Erro ao enviar comando: ' + (err.response?.data?.message || err.message) });
+  }
+});
+
 module.exports = router;

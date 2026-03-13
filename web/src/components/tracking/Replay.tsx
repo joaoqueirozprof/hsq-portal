@@ -15,7 +15,7 @@ interface ReplayProps {
 }
 
 interface Device {
-  deviceId: string;
+  deviceId: number;
   name: string;
   category: string;
 }
@@ -146,7 +146,7 @@ export default function Replay({ token, onClose }: ReplayProps) {
         const devicesList = data.devices || data;
         setDevices(devicesList);
         if (devicesList.length > 0) {
-          setSelectedDevice(devicesList[0].deviceId);
+          setSelectedDevice(String(devicesList[0].deviceId));
         }
       } catch (err) {
         setError(
@@ -267,9 +267,14 @@ export default function Replay({ token, onClose }: ReplayProps) {
       const calculatedStats = calculateStats(data);
       setStats(calculatedStats);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Erro ao carregar dados da rota'
-      );
+      let errorMsg = 'Erro ao carregar dados da rota';
+      if (err instanceof Error) {
+        errorMsg = err.message;
+      } else if (typeof err === 'object' && err !== null && 'response' in err) {
+        const apiErr = err as any;
+        errorMsg = apiErr.response?.data?.error || apiErr.response?.data?.message || errorMsg;
+      }
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -471,7 +476,7 @@ export default function Replay({ token, onClose }: ReplayProps) {
           >
             <option value="">Selecione um dispositivo</option>
             {devices.map((device) => (
-              <option key={device.deviceId} value={device.deviceId}>
+              <option key={device.deviceId} value={String(device.deviceId)}>
                 {device.name}
               </option>
             ))}

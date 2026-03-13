@@ -1,45 +1,50 @@
 import React, { useState, useEffect } from 'react';
 
 interface Device {
-  deviceId: string;
+  deviceId: number;
   name: string;
   category: string;
 }
 
 interface TripReport {
-  inicio: string;
-  fim: string;
-  de: string;
-  para: string;
-  distancia: number;
-  duracao: number;
-  velocidadeMedia: number;
-  velocidadeMaxima: number;
+  startTime: string;
+  endTime: string;
+  startAddress: string;
+  endAddress: string;
+  distance: number;
+  duration: number;
+  averageSpeed: number;
+  maxSpeed: number;
+  spentFuel?: number;
 }
 
 interface StopReport {
-  inicio: string;
-  fim: string;
-  duracao: number;
-  local: string;
-  lat: number;
-  lng: number;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  address: string;
+  latitude: number;
+  longitude: number;
+  engineHours?: number;
+  spentFuel?: number;
 }
 
 interface SummaryReport {
-  distanciaTotal: number;
-  tempoEmMovimento: number;
-  tempoParado: number;
-  velocidadeMedia: number;
-  velocidadeMaxima: number;
-  viagens: number;
+  deviceName: string;
+  distance: number;
+  averageSpeed: number;
+  maxSpeed: number;
+  engineHours: number;
+  spentFuel: number;
+  startTime: string;
+  endTime: string;
 }
 
 interface EventReport {
-  dataHora: string;
-  tipo: string;
-  descricao: string;
-  velocidade?: number;
+  type: string;
+  eventTime: string;
+  positionId: number;
+  attributes: Record<string, any>;
 }
 
 type ReportType = 'trips' | 'stops' | 'summary' | 'events';
@@ -51,7 +56,7 @@ interface ReportsProps {
 
 export default function Reports({ token, onClose }: ReportsProps) {
   const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string>('');
+  const [selectedDevice, setSelectedDevice] = useState<number | ''>('');
   const [reportType, setReportType] = useState<ReportType>('trips');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
@@ -146,9 +151,10 @@ export default function Reports({ token, onClose }: ReportsProps) {
     return new Date(dateString).toLocaleString('pt-BR');
   };
 
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
+  const formatDuration = (milliseconds: number): string => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
 
     if (hours > 0) {
       return `${hours}h ${minutes}min`;
@@ -335,7 +341,7 @@ export default function Reports({ token, onClose }: ReportsProps) {
           <select
             id="deviceSelect"
             value={selectedDevice}
-            onChange={(e) => setSelectedDevice(e.target.value)}
+            onChange={(e) => setSelectedDevice(e.target.value ? parseInt(e.target.value) : '')}
             style={selectStyle}
           >
             <option value="">Selecione um dispositivo</option>
@@ -436,13 +442,13 @@ function TripsReport({
   formatDuration,
   formatSpeed,
 }: {
-  data: any;
+  data: TripReport[];
   formatDate: (date: string) => string;
   formatDistance: (km: number) => string;
-  formatDuration: (seconds: number) => string;
+  formatDuration: (milliseconds: number) => string;
   formatSpeed: (speed: number) => string;
 }) {
-  const trips: TripReport[] = data.trips || [];
+  const trips: TripReport[] = Array.isArray(data) ? data : [];
 
   const tableWrapperStyle: React.CSSProperties = {
     overflowX: 'auto',
@@ -501,14 +507,14 @@ function TripsReport({
         <tbody>
           {trips.map((trip, idx) => (
             <tr key={idx} style={tbodyTrStyle}>
-              <td style={tdStyle}>{formatDate(trip.inicio)}</td>
-              <td style={tdStyle}>{formatDate(trip.fim)}</td>
-              <td style={tdStyle} title={trip.de}>{trip.de}</td>
-              <td style={tdStyle} title={trip.para}>{trip.para}</td>
-              <td style={tdStyle}>{formatDistance(trip.distancia)}</td>
-              <td style={tdStyle}>{formatDuration(trip.duracao)}</td>
-              <td style={tdStyle}>{formatSpeed(trip.velocidadeMedia)}</td>
-              <td style={tdStyle}>{formatSpeed(trip.velocidadeMaxima)}</td>
+              <td style={tdStyle}>{formatDate(trip.startTime)}</td>
+              <td style={tdStyle}>{formatDate(trip.endTime)}</td>
+              <td style={tdStyle} title={trip.startAddress}>{trip.startAddress}</td>
+              <td style={tdStyle} title={trip.endAddress}>{trip.endAddress}</td>
+              <td style={tdStyle}>{formatDistance(trip.distance)}</td>
+              <td style={tdStyle}>{formatDuration(trip.duration)}</td>
+              <td style={tdStyle}>{formatSpeed(trip.averageSpeed)}</td>
+              <td style={tdStyle}>{formatSpeed(trip.maxSpeed)}</td>
             </tr>
           ))}
         </tbody>
@@ -526,11 +532,11 @@ function StopsReport({
   formatDate,
   formatDuration,
 }: {
-  data: any;
+  data: StopReport[];
   formatDate: (date: string) => string;
-  formatDuration: (seconds: number) => string;
+  formatDuration: (milliseconds: number) => string;
 }) {
-  const stops: StopReport[] = data.stops || [];
+  const stops: StopReport[] = Array.isArray(data) ? data : [];
 
   const tableWrapperStyle: React.CSSProperties = {
     overflowX: 'auto',
@@ -586,12 +592,12 @@ function StopsReport({
         <tbody>
           {stops.map((stop, idx) => (
             <tr key={idx} style={tbodyTrStyle}>
-              <td style={tdStyle}>{formatDate(stop.inicio)}</td>
-              <td style={tdStyle}>{formatDate(stop.fim)}</td>
-              <td style={tdStyle}>{formatDuration(stop.duracao)}</td>
-              <td style={tdStyle} title={stop.local}>{stop.local}</td>
+              <td style={tdStyle}>{formatDate(stop.startTime)}</td>
+              <td style={tdStyle}>{formatDate(stop.endTime)}</td>
+              <td style={tdStyle}>{formatDuration(stop.duration)}</td>
+              <td style={tdStyle} title={stop.address}>{stop.address}</td>
               <td style={tdStyle}>
-                {stop.lat.toFixed(6)}, {stop.lng.toFixed(6)}
+                {stop.latitude.toFixed(6)}, {stop.longitude.toFixed(6)}
               </td>
             </tr>
           ))}
@@ -611,42 +617,54 @@ function SummaryReport({
   formatDuration,
   formatSpeed,
 }: {
-  data: SummaryReport;
+  data: SummaryReport[];
   formatDistance: (km: number) => string;
-  formatDuration: (seconds: number) => string;
+  formatDuration: (milliseconds: number) => string;
   formatSpeed: (speed: number) => string;
 }) {
+  const summary = Array.isArray(data) && data.length > 0 ? data[0] : null;
+
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '16px',
   };
 
+  const noDataStyle: React.CSSProperties = {
+    padding: '24px',
+    textAlign: 'center',
+    color: 'var(--text-muted)',
+  };
+
+  if (!summary) {
+    return <div style={noDataStyle}>Nenhum resumo disponível para o período</div>;
+  }
+
   return (
     <div style={gridStyle}>
       <SummaryCard
+        label="Dispositivo"
+        value={summary.deviceName}
+      />
+      <SummaryCard
         label="Distância Total"
-        value={formatDistance(data.distanciaTotal)}
-      />
-      <SummaryCard
-        label="Tempo em Movimento"
-        value={formatDuration(data.tempoEmMovimento)}
-      />
-      <SummaryCard
-        label="Tempo Parado"
-        value={formatDuration(data.tempoParado)}
+        value={formatDistance(summary.distance)}
       />
       <SummaryCard
         label="Velocidade Média"
-        value={formatSpeed(data.velocidadeMedia)}
+        value={formatSpeed(summary.averageSpeed)}
       />
       <SummaryCard
         label="Velocidade Máxima"
-        value={formatSpeed(data.velocidadeMaxima)}
+        value={formatSpeed(summary.maxSpeed)}
       />
       <SummaryCard
-        label="Viagens"
-        value={data.viagens.toString()}
+        label="Horas de Motor"
+        value={summary.engineHours.toString()}
+      />
+      <SummaryCard
+        label="Combustível Gasto"
+        value={`${summary.spentFuel.toFixed(2)} L`}
       />
     </div>
   );
@@ -693,13 +711,13 @@ function EventsReport({
   getEventColor,
   getEventLabel,
 }: {
-  data: any;
+  data: EventReport[];
   formatDate: (date: string) => string;
   formatSpeed: (speed: number) => string;
   getEventColor: (type: string) => string;
   getEventLabel: (type: string) => string;
 }) {
-  const events: EventReport[] = data.events || [];
+  const events: EventReport[] = Array.isArray(data) ? data : [];
 
   const tableWrapperStyle: React.CSSProperties = {
     overflowX: 'auto',
@@ -757,21 +775,21 @@ function EventsReport({
           <tr>
             <th style={thStyle}>Data/Hora</th>
             <th style={thStyle}>Tipo</th>
-            <th style={thStyle}>Descrição</th>
-            <th style={thStyle}>Velocidade</th>
+            <th style={thStyle}>Posição ID</th>
+            <th style={thStyle}>Atributos</th>
           </tr>
         </thead>
         <tbody>
           {events.map((event, idx) => (
             <tr key={idx} style={tbodyTrStyle}>
-              <td style={tdStyle}>{formatDate(event.dataHora)}</td>
+              <td style={tdStyle}>{formatDate(event.eventTime)}</td>
               <td style={tdStyle}>
-                <span style={badgeStyle(getEventColor(event.tipo))}>
-                  {getEventLabel(event.tipo)}
+                <span style={badgeStyle(getEventColor(event.type))}>
+                  {getEventLabel(event.type)}
                 </span>
               </td>
-              <td style={tdStyle}>{event.descricao}</td>
-              <td style={tdStyle}>{event.velocidade !== undefined ? formatSpeed(event.velocidade) : '-'}</td>
+              <td style={tdStyle}>{event.positionId}</td>
+              <td style={tdStyle}>{JSON.stringify(event.attributes)}</td>
             </tr>
           ))}
         </tbody>
