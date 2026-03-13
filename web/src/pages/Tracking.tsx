@@ -179,7 +179,7 @@ export default function TrackingPage() {
       const resp = await fetch(`/api/tracking/commands/${deviceId}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command }),
+        body: JSON.stringify({ type: command }),
       });
       const data = await resp.json();
       if (resp.ok) {
