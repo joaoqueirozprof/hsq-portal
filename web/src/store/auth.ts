@@ -32,7 +32,12 @@ export const useAuthStore = create<AuthState>()(
       traccarEmail: null,
       isAuthenticated: false,
       login: (token, user, traccarEmail) =>
-        set({ token, user, traccarEmail: traccarEmail || null, isAuthenticated: true }),
+        set({
+          token,
+          user: { ...user, role: user.role || 'client' },
+          traccarEmail: traccarEmail || null,
+          isAuthenticated: true,
+        }),
       logout: () =>
         set({ token: null, user: null, traccarEmail: null, isAuthenticated: false }),
       updateUser: (updates) =>
@@ -42,6 +47,17 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'hsq-auth',
+      // Migrate old sessions that are missing the role field
+      onRehydrate: (_state, error) => {
+        if (error) return;
+        return (rehydratedState) => {
+          if (rehydratedState?.user && !rehydratedState.user.role) {
+            // Old session without role - infer from email (admins have email, clients have document)
+            const inferredRole = rehydratedState.user.email && !rehydratedState.user.document ? 'admin' : 'client';
+            rehydratedState.user.role = inferredRole;
+          }
+        };
+      },
     }
   )
 );
