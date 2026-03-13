@@ -525,4 +525,30 @@ router.post('/devices/:id/unassign', validateParamInt('id'), validate({ clientId
   }
 });
 
+// ==================== AUDIT LOG ====================
+
+// GET /api/admin/audit-log - List recent audit entries
+router.get('/audit-log', async (req, res, next) => {
+  try {
+    const db = req.app.locals.db;
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const offset = parseInt(req.query.offset) || 0;
+
+    const result = await db.query(
+      `SELECT al.*,
+              COALESCE(c.name, a.name, al.user_id::text) as user_name
+       FROM audit_log al
+       LEFT JOIN clients c ON al.user_type = 'client' AND al.user_id::text = c.id::text
+       LEFT JOIN (SELECT id, name FROM admin_users) a ON al.user_type = 'admin' AND al.user_id::text = a.id::text
+       ORDER BY al.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

@@ -78,6 +78,74 @@ router.get('/positions', async (req, res) => {
   }
 });
 
+// GET /api/tracking/devices - Simple device list (used by ClientDashboard)
+router.get('/devices', async (req, res) => {
+  try {
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+
+    let devices;
+    if (req.user.role === 'admin') {
+      devices = await traccar.getAllDevices();
+    } else {
+      const traccarUserId = req.user.traccarUserId;
+      if (!traccarUserId) {
+        return res.json({ devices: [] });
+      }
+      devices = await traccar.getUserDevices(traccarUserId);
+    }
+
+    const result = devices.map(d => ({
+      deviceId: d.id,
+      name: d.name,
+      status: d.status,
+      lastUpdate: d.lastUpdate,
+      category: d.category || 'car',
+    }));
+
+    res.json({ devices: result });
+  } catch (err) {
+    console.error('Tracking devices error:', err.message);
+    res.status(500).json({ error: 'Erro ao buscar dispositivos' });
+  }
+});
+
+// GET /api/tracking/traccar-session - Get Traccar credentials for auto-login
+router.get('/traccar-session', async (req, res) => {
+  try {
+    if (req.user.role === 'admin') {
+      // Admin uses the main Traccar admin account
+      return res.json({
+        email: process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com',
+        password: process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!',
+      });
+    }
+
+    // Client: look up the Traccar user credentials from our DB
+    const db = req.app.locals.db;
+    const client = await db.query(
+      'SELECT traccar_user_id, document FROM clients WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (client.rows.length === 0 || !client.rows[0].traccar_user_id) {
+      return res.json({ email: null, password: null });
+    }
+
+    // Get Traccar user email
+    const traccar = new TraccarService(req.app.locals.traccarUrl);
+    const traccarUser = await traccar.request('GET', `/api/users/${client.rows[0].traccar_user_id}`);
+
+    // The password is set to the client's document (CPF/CNPJ) by default
+    res.json({
+      email: traccarUser.email,
+      password: client.rows[0].document.replace(/[.\-\/]/g, ''),
+    });
+  } catch (err) {
+    console.error('Traccar session error:', err.message);
+    res.json({ email: null, password: null });
+  }
+});
+
 // GET /api/tracking/trail/:deviceId - Get position history for a device
 router.get('/trail/:deviceId', async (req, res) => {
   try {
