@@ -8,6 +8,10 @@ const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 
+// Middleware
+const { sanitizeMiddleware } = require('./middleware/validate');
+const { errorHandler, setupProcessHandlers } = require('./middleware/errorHandler');
+
 // Routes
 const authRoutes = require('./routes/auth');
 const clientRoutes = require('./routes/clients');
@@ -15,12 +19,18 @@ const adminRoutes = require('./routes/admin');
 const trackingRoutes = require('./routes/tracking');
 const geocodeRoutes = require('./routes/geocode');
 
+// Setup process-level error handlers
+setupProcessHandlers();
+
 const app = express();
 app.set("trust proxy", 1);
 
-// Database pool
+// Database pool with connection limits
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://hsq_admin:HsqSecure2026@hsq-db:5432/hsq_portal',
+  max: 20,                    // Max connections in pool
+  idleTimeoutMillis: 30000,   // Close idle connections after 30s
+  connectionTimeoutMillis: 5000, // Fail if can't connect in 5s
 });
 
 // Make pool available to routes
@@ -28,33 +38,68 @@ app.locals.db = pool;
 app.locals.traccarUrl = process.env.TRACCAR_URL || 'http://72.61.129.78:8082';
 app.locals.jwtSecret = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
 
-// Middleware
-app.use(helmet({ contentSecurityPolicy: false }));
+// ====== SECURITY MIDDLEWARE ======
+app.use(helmet({
+  contentSecurityPolicy: false, // Frontend uses inline scripts
+  crossOriginEmbedderPolicy: false,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+  },
+}));
+
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
 }));
-app.use(express.json());
+
+// Body parsing with size limits
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(cookieParser());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Muitas requisições. Tente novamente em 15 minutos.' },
+// Input sanitization (XSS protection)
+app.use(sanitizeMiddleware);
+
+// Rate limiting - login endpoints (stricter)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 20,                   // 20 attempts per window (stricter for login)
+  message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use('/api/auth', limiter);
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/admin/login', loginLimiter);
+
+// Rate limiting - forgot password (even stricter)
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,                    // 5 attempts per hour
+  message: { error: 'Muitas solicitacoes de recuperacao. Tente novamente em 1 hora.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/forgot-password', forgotLimiter);
+
+// Rate limiting - general API (relaxed)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { error: 'Muitas requisicoes. Tente novamente em 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', generalLimiter);
 
 // ====== LONG POLLING for real-time tracking ======
-// Hostinger host nginx buffers SSE/WebSocket, so we use long polling instead.
-// Client polls /api/tracking/poll?since=<timestamp>, server holds request until
-// new data arrives or 25s timeout, then responds with positions/devices.
 const JWT_SECRET = process.env.JWT_SECRET || 'hsq-jwt-secret-2026-prod';
 
 // Shared buffer for latest Traccar data (filled by WS bridge below)
 let latestPositions = [];
 let latestDevices = [];
 let lastUpdateTime = 0;
-const pollWaiters = new Set(); // { res, since, timer }
+const pollWaiters = new Set();
 
 function notifyPollWaiters() {
   const now = lastUpdateTime;
@@ -97,7 +142,7 @@ app.get('/api/tracking/poll', (req, res) => {
   const timer = setTimeout(() => {
     pollWaiters.delete(waiter);
     res.json({ positions: [], devices: [], timestamp: lastUpdateTime || Date.now() });
-  }, 25000); // 25s timeout (less than typical proxy timeout of 60s)
+  }, 25000);
 
   const waiter = { res, since, timer };
   pollWaiters.add(waiter);
@@ -115,19 +160,42 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/geocode', geocodeRoutes);
 
-// Health check
+// Health check (extended with system info)
 app.get('/api/health', async (req, res) => {
   try {
+    const dbStart = Date.now();
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    const dbLatency = Date.now() - dbStart;
+
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: Math.round(process.uptime()),
+      db: { status: 'connected', latencyMs: dbLatency },
+      traccar: {
+        wsConnected: !!traccarWs && traccarWs.readyState === WebSocket.OPEN,
+        lastUpdate: lastUpdateTime ? new Date(lastUpdateTime).toISOString() : null,
+        pollWaiters: pollWaiters.size,
+      },
+      memory: {
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+        heap: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+      },
+    });
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
 
+// 404 handler
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint nao encontrado' });
+});
+
+// Global error handler (MUST be last)
+app.use(errorHandler);
+
 // ====== TRACCAR REAL-TIME BRIDGE ======
-// Server-side: WebSocket to Traccar's native API
-// Client-side: Long polling — works through any HTTP proxy (Hostinger buffers SSE)
 const TRACCAR_URL = process.env.TRACCAR_URL || 'http://72.61.129.78:8082';
 const TRACCAR_ADMIN_EMAIL = process.env.TRACCAR_ADMIN_EMAIL || 'admin@hsqrastreamento.com';
 const TRACCAR_ADMIN_PASSWORD = process.env.TRACCAR_ADMIN_PASSWORD || 'HSQ@2026Admin!';
@@ -164,7 +232,6 @@ function onTraccarData(eventType, data) {
     latestDevices = data.devices || [];
   }
   lastUpdateTime = Date.now();
-  // Wake up all long poll waiters
   notifyPollWaiters();
 }
 
@@ -239,7 +306,9 @@ function connectTraccarWebSocket() {
 const PORT = process.env.PORT || 4080;
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`HSQ Portal API running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Long poll endpoint: /api/tracking/poll`);
+
   // Run seed
   try {
     const seed = require('./seed');
@@ -247,6 +316,7 @@ app.listen(PORT, '0.0.0.0', async () => {
   } catch (err) {
     console.error('Seed failed:', err.message);
   }
+
   // Start Traccar bridge
   await getTraccarSession();
   connectTraccarWebSocket();

@@ -1,7 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { validate, validateParamUUID, validateParamInt } = require('../middleware/validate');
 const TraccarService = require('../services/traccar');
+const emailService = require('../services/email');
 
 const router = express.Router();
 
@@ -25,12 +27,16 @@ function formatDoc(doc, type) {
   return doc;
 }
 
-// GET /api/admin/clients - List all clients
-router.get('/clients', async (req, res) => {
+// GET /api/admin/clients - List all clients (with search/pagination)
+router.get('/clients', async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const { search, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Validate pagination params
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
+    const offset = (pageNum - 1) * limitNum;
 
     let query = 'SELECT * FROM clients';
     let countQuery = 'SELECT COUNT(*) FROM clients';
@@ -46,7 +52,7 @@ router.get('/clients', async (req, res) => {
     }
 
     query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(parseInt(limit), offset);
+    params.push(limitNum, offset);
 
     const [dataResult, countResult] = await Promise.all([
       db.query(query, params),
@@ -56,27 +62,24 @@ router.get('/clients', async (req, res) => {
     res.json({
       data: dataResult.rows,
       total: parseInt(countResult.rows[0].count),
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (err) {
-    console.error('List clients error:', err.message);
-    res.status(500).json({ error: 'Erro ao listar clientes' });
+    next(err);
   }
 });
 
-// GET /api/admin/clients/:id - Get client details
-router.get('/clients/:id', async (req, res) => {
+// GET /api/admin/clients/:id
+router.get('/clients/:id', validateParamUUID(), async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const result = await db.query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.status(404).json({ error: 'Cliente nao encontrado' });
     }
 
     const client = result.rows[0];
-
-    // Also get devices from Traccar
     let devices = [];
     if (client.traccar_user_id) {
       try {
@@ -89,67 +92,76 @@ router.get('/clients/:id', async (req, res) => {
 
     res.json({ ...client, devices });
   } catch (err) {
-    console.error('Get client error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar cliente' });
+    next(err);
   }
 });
 
 // POST /api/admin/clients - Create new client
-router.post('/clients', async (req, res) => {
-  try {
-    const db = req.app.locals.db;
-    const {
-      document, documentType, name, tradeName, phone, email,
-      address, city, state, contactPerson,
-    } = req.body;
+router.post('/clients',
+  validate({
+    document: ['required', 'document'],
+    documentType: ['required', 'documentType'],
+    name: ['required'],
+    email: ['required', 'email'],
+  }),
+  async (req, res, next) => {
+    try {
+      const db = req.app.locals.db;
+      const { document, documentType, name, tradeName, phone, email, address, city, state, contactPerson } = req.body;
 
-    if (!document || !documentType || !name || !email) {
-      return res.status(400).json({ error: 'Documento, tipo, nome e email sao obrigatorios' });
+      const formattedDoc = formatDoc(document, documentType);
+      const cleanDocument = cleanDoc(document);
+
+      const existing = await db.query(
+        "SELECT id FROM clients WHERE REPLACE(REPLACE(REPLACE(document, '.', ''), '-', ''), '/', '') = $1",
+        [cleanDocument]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'Documento ja cadastrado' });
+      }
+
+      const traccar = new TraccarService(req.app.locals.traccarUrl);
+      const traccarEmail = `${cleanDocument}@hsqrastreamento.com`;
+      const traccarUser = await traccar.createUser(traccarEmail, cleanDocument, name);
+
+      const result = await db.query(
+        `INSERT INTO clients (document, document_type, name, trade_name, phone, email, address, city, state, contact_person, traccar_user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [formattedDoc, documentType, name, tradeName || null, phone || null, email || null,
+         address || null, city || null, state || null, contactPerson || null, traccarUser.id]
+      );
+
+      await db.query(
+        'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
+        ['admin', req.user.id, 'client_created', JSON.stringify({ clientId: result.rows[0].id, name })]
+      );
+
+      // Send welcome email (non-blocking)
+      if (email && emailService.isConfigured) {
+        emailService.sendWelcome(email, name, cleanDocument).catch(err => {
+          console.error('Welcome email failed:', err.message);
+        });
+      }
+
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      next(err);
     }
-
-    const formattedDoc = formatDoc(document, documentType);
-    const cleanDocument = cleanDoc(document);
-
-    // Check if document already exists
-    const existing = await db.query(
-      "SELECT id FROM clients WHERE REPLACE(REPLACE(REPLACE(document, '.', ''), '-', ''), '/', '') = $1",
-      [cleanDocument]
-    );
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'Documento já cadastrado' });
-    }
-
-    // Create user in Traccar with document as initial password
-    const traccar = new TraccarService(req.app.locals.traccarUrl);
-    const traccarEmail = `${cleanDocument}@hsqrastreamento.com`;
-    const traccarUser = await traccar.createUser(traccarEmail, cleanDocument, name);
-
-    // Insert into portal DB
-    const result = await db.query(
-      `INSERT INTO clients (document, document_type, name, trade_name, phone, email, address, city, state, contact_person, traccar_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING *`,
-      [formattedDoc, documentType, name, tradeName || null, phone || null, email || null,
-       address || null, city || null, state || null, contactPerson || null, traccarUser.id]
-    );
-
-    await db.query(
-      'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
-      ['admin', req.user.id, 'client_created', JSON.stringify({ clientId: result.rows[0].id, name })]
-    );
-
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Create client error:', err.message);
-    res.status(500).json({ error: 'Erro ao criar cliente: ' + err.message });
   }
-});
+);
 
-// PATCH /api/admin/clients/:id - Update client
-router.patch('/clients/:id', async (req, res) => {
+// PATCH /api/admin/clients/:id
+router.patch('/clients/:id', validateParamUUID(), async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const { name, tradeName, phone, email, address, city, state, contactPerson } = req.body;
+
+    if (email !== undefined && email !== null && email !== '') {
+      const { validators } = require('../middleware/validate');
+      if (!validators.isEmail(email)) {
+        return res.status(400).json({ error: 'Email invalido' });
+      }
+    }
 
     const fields = [];
     const values = [];
@@ -177,34 +189,29 @@ router.patch('/clients/:id', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.status(404).json({ error: 'Cliente nao encontrado' });
     }
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Update client error:', err.message);
-    res.status(500).json({ error: 'Erro ao atualizar cliente' });
+    next(err);
   }
 });
 
-// POST /api/admin/clients/:id/toggle-active - Activate/deactivate client
-router.post('/clients/:id/toggle-active', async (req, res) => {
+// POST /api/admin/clients/:id/toggle-active
+router.post('/clients/:id/toggle-active', validateParamUUID(), async (req, res, next) => {
   try {
     const db = req.app.locals.db;
-
-    // Get current state
     const current = await db.query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
     if (current.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.status(404).json({ error: 'Cliente nao encontrado' });
     }
 
     const client = current.rows[0];
     const newActive = !client.is_active;
 
-    // Update in portal DB
     await db.query('UPDATE clients SET is_active = $1, updated_at = NOW() WHERE id = $2', [newActive, req.params.id]);
 
-    // Update in Traccar
     if (client.traccar_user_id) {
       const traccar = new TraccarService(req.app.locals.traccarUrl);
       await traccar.setUserActive(client.traccar_user_id, newActive);
@@ -216,30 +223,34 @@ router.post('/clients/:id/toggle-active', async (req, res) => {
        JSON.stringify({ clientId: req.params.id })]
     );
 
+    // Send status notification email (non-blocking)
+    if (client.email && emailService.isConfigured) {
+      emailService.sendAccountStatus(client.email, client.name, newActive).catch(err => {
+        console.error('Status email failed:', err.message);
+      });
+    }
+
     res.json({ isActive: newActive, message: newActive ? 'Cliente ativado' : 'Cliente desativado' });
   } catch (err) {
-    console.error('Toggle active error:', err.message);
-    res.status(500).json({ error: 'Erro ao alterar status' });
+    next(err);
   }
 });
 
-// POST /api/admin/clients/:id/reset-password - Reset client password to document
-router.post('/clients/:id/reset-password', async (req, res) => {
+// POST /api/admin/clients/:id/reset-password
+router.post('/clients/:id/reset-password', validateParamUUID(), async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const result = await db.query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
+      return res.status(404).json({ error: 'Cliente nao encontrado' });
     }
 
     const client = result.rows[0];
     const cleanDocument = cleanDoc(client.document);
 
-    // Reset password in Traccar to the document number
     const traccar = new TraccarService(req.app.locals.traccarUrl);
     await traccar.updatePassword(client.traccar_user_id, cleanDocument);
 
-    // Mark as first login again
     await db.query(
       'UPDATE clients SET must_change_password = true, is_first_login = true, updated_at = NOW() WHERE id = $1',
       [req.params.id]
@@ -252,13 +263,12 @@ router.post('/clients/:id/reset-password', async (req, res) => {
 
     res.json({ message: 'Senha resetada para o documento do cliente' });
   } catch (err) {
-    console.error('Reset password error:', err.message);
-    res.status(500).json({ error: 'Erro ao resetar senha' });
+    next(err);
   }
 });
 
-// GET /api/admin/dashboard - Dashboard stats
-router.get('/dashboard', async (req, res) => {
+// GET /api/admin/dashboard
+router.get('/dashboard', async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const [totalClients, activeClients, recentLogins, onlineNow] = await Promise.all([
@@ -275,13 +285,12 @@ router.get('/dashboard', async (req, res) => {
       onlineNow: parseInt(onlineNow.rows[0].count),
     });
   } catch (err) {
-    console.error('Dashboard error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar estatisticas' });
+    next(err);
   }
 });
 
-// DELETE /api/admin/clients/:id - Delete client permanently
-router.delete('/clients/:id', async (req, res) => {
+// DELETE /api/admin/clients/:id
+router.delete('/clients/:id', validateParamUUID(), async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const result = await db.query('SELECT * FROM clients WHERE id = $1', [req.params.id]);
@@ -290,8 +299,6 @@ router.delete('/clients/:id', async (req, res) => {
     }
 
     const client = result.rows[0];
-
-    // Delete from Traccar first
     if (client.traccar_user_id) {
       try {
         const traccar = new TraccarService(req.app.locals.traccarUrl);
@@ -301,7 +308,6 @@ router.delete('/clients/:id', async (req, res) => {
       }
     }
 
-    // Delete from portal DB
     await db.query('DELETE FROM clients WHERE id = $1', [req.params.id]);
 
     await db.query(
@@ -311,91 +317,57 @@ router.delete('/clients/:id', async (req, res) => {
 
     res.json({ message: 'Cliente deletado permanentemente' });
   } catch (err) {
-    console.error('Delete client error:', err.message);
-    res.status(500).json({ error: 'Erro ao deletar cliente: ' + err.message });
+    next(err);
   }
 });
 
-
-// GET /api/admin/online-users - List users with online status
-router.get('/online-users', async (req, res) => {
+// GET /api/admin/online-users
+router.get('/online-users', async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const result = await db.query(`
       SELECT id, name, document, document_type, phone, email, city, state,
              last_login_at, last_logout_at,
-             CASE 
-               WHEN last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at)
-               THEN true
-               ELSE false
-             END as is_online,
-             CASE
-               WHEN last_login_at IS NOT NULL
-               THEN EXTRACT(EPOCH FROM (NOW() - last_login_at)) / 60
-               ELSE NULL
-             END as minutes_since_activity
-      FROM clients
-      WHERE is_active = true
-      ORDER BY 
-        CASE 
-          WHEN last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at) THEN 0
-          ELSE 1
-        END,
+             CASE WHEN last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at)
+               THEN true ELSE false END as is_online,
+             CASE WHEN last_login_at IS NOT NULL
+               THEN EXTRACT(EPOCH FROM (NOW() - last_login_at)) / 60 ELSE NULL END as minutes_since_activity
+      FROM clients WHERE is_active = true
+      ORDER BY
+        CASE WHEN last_login_at IS NOT NULL AND (last_logout_at IS NULL OR last_login_at > last_logout_at) THEN 0 ELSE 1 END,
         last_login_at DESC NULLS LAST
     `);
-    
+
     const users = result.rows.map(u => ({
-      id: u.id,
-      name: u.name,
-      document: u.document,
-      documentType: u.document_type,
-      phone: u.phone,
-      email: u.email,
-      city: u.city,
-      state: u.state,
-      lastLoginAt: u.last_login_at,
-      lastLogoutAt: u.last_logout_at,
+      id: u.id, name: u.name, document: u.document, documentType: u.document_type,
+      phone: u.phone, email: u.email, city: u.city, state: u.state,
+      lastLoginAt: u.last_login_at, lastLogoutAt: u.last_logout_at,
       isOnline: u.is_online,
       minutesSinceActivity: u.minutes_since_activity ? Math.round(u.minutes_since_activity) : null,
     }));
 
-    const onlineCount = users.filter(u => u.isOnline).length;
-    
-    res.json({
-      onlineCount,
-      totalActive: users.length,
-      users,
-    });
+    res.json({ onlineCount: users.filter(u => u.isOnline).length, totalActive: users.length, users });
   } catch (err) {
-    console.error('Online users error:', err.message);
-    res.status(500).json({ error: 'Erro ao buscar usuarios online' });
+    next(err);
   }
 });
 
-
 // ============ DEVICE MANAGEMENT ============
 
-// GET /api/admin/devices - List all devices with client assignments
-router.get('/devices', async (req, res) => {
+// GET /api/admin/devices
+router.get('/devices', async (req, res, next) => {
   try {
     const db = req.app.locals.db;
     const traccar = new TraccarService(req.app.locals.traccarUrl);
-
-    // Get all devices from Traccar
     const devices = await traccar.getAllDevices();
 
-    // Get all clients with their traccar_user_id
     const clientsResult = await db.query('SELECT id, name, document, traccar_user_id FROM clients WHERE traccar_user_id IS NOT NULL');
     const clientsByTraccarId = {};
-    for (const c of clientsResult.rows) {
-      clientsByTraccarId[c.traccar_user_id] = c;
-    }
+    for (const c of clientsResult.rows) { clientsByTraccarId[c.traccar_user_id] = c; }
 
-    // Get all non-admin users from Traccar to map devices to clients
     const users = await traccar.getUsers();
     const nonAdminUsers = users.filter(u => !u.administrator);
 
-    // For each non-admin user, get their devices and build mapping
     const deviceToClient = {};
     for (const user of nonAdminUsers) {
       try {
@@ -403,72 +375,41 @@ router.get('/devices', async (req, res) => {
         const client = clientsByTraccarId[user.id];
         if (client) {
           for (const d of userDevices) {
-            deviceToClient[d.id] = {
-              clientId: client.id,
-              clientName: client.name,
-              clientDocument: client.document,
-              traccarUserId: user.id,
-            };
+            deviceToClient[d.id] = { clientId: client.id, clientName: client.name, clientDocument: client.document, traccarUserId: user.id };
           }
         }
-      } catch (e) {
-        // Skip users that fail
-      }
+      } catch (e) { /* skip */ }
     }
 
-    // Get latest positions
     let positions = [];
-    try {
-      positions = await traccar.getPositions();
-    } catch (e) { /* ignore */ }
+    try { positions = await traccar.getPositions(); } catch (e) { /* ignore */ }
     const positionsByDevice = {};
-    for (const p of positions) {
-      positionsByDevice[p.deviceId] = p;
-    }
+    for (const p of positions) { positionsByDevice[p.deviceId] = p; }
 
-    // Enrich devices
-    const enriched = devices.map(d => {
-      const assignment = deviceToClient[d.id] || null;
-      const pos = positionsByDevice[d.id] || null;
-      return {
-        id: d.id,
-        name: d.name,
-        uniqueId: d.uniqueId,
-        category: d.category,
-        status: d.status,
-        disabled: d.disabled,
-        lastUpdate: d.lastUpdate,
-        client: assignment,
-        position: pos ? {
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          speed: pos.speed,
-          address: pos.address || null,
-          fixTime: pos.fixTime,
-        } : null,
-      };
-    });
+    const enriched = devices.map(d => ({
+      id: d.id, name: d.name, uniqueId: d.uniqueId, category: d.category,
+      status: d.status, disabled: d.disabled, lastUpdate: d.lastUpdate,
+      client: deviceToClient[d.id] || null,
+      position: positionsByDevice[d.id] ? {
+        latitude: positionsByDevice[d.id].latitude, longitude: positionsByDevice[d.id].longitude,
+        speed: positionsByDevice[d.id].speed, address: positionsByDevice[d.id].address || null,
+        fixTime: positionsByDevice[d.id].fixTime,
+      } : null,
+    }));
 
     res.json(enriched);
   } catch (err) {
-    console.error('List devices error:', err.message);
-    res.status(500).json({ error: 'Erro ao listar dispositivos' });
+    next(err);
   }
 });
 
-// POST /api/admin/devices - Create device
-router.post('/devices', async (req, res) => {
+// POST /api/admin/devices
+router.post('/devices', validate({ name: ['required'], uniqueId: ['required'] }), async (req, res, next) => {
   try {
     const { name, uniqueId, category, clientId } = req.body;
-
-    if (!name || !uniqueId) {
-      return res.status(400).json({ error: 'Nome e identificador (IMEI) são obrigatórios' });
-    }
-
     const traccar = new TraccarService(req.app.locals.traccarUrl);
     const device = await traccar.createDevice(name, uniqueId, category);
 
-    // If clientId provided, link device to client's Traccar user
     if (clientId) {
       const db = req.app.locals.db;
       const clientResult = await db.query('SELECT traccar_user_id FROM clients WHERE id = $1', [clientId]);
@@ -485,18 +426,15 @@ router.post('/devices', async (req, res) => {
 
     res.status(201).json(device);
   } catch (err) {
-    console.error('Create device error:', err.message);
-    const msg = err.response?.data?.message || err.message;
-    res.status(400).json({ error: 'Erro ao criar dispositivo: ' + msg });
+    next(err);
   }
 });
 
-// PUT /api/admin/devices/:id - Update device
-router.put('/devices/:id', async (req, res) => {
+// PUT /api/admin/devices/:id
+router.put('/devices/:id', validateParamInt('id'), async (req, res, next) => {
   try {
     const traccar = new TraccarService(req.app.locals.traccarUrl);
     const { name, uniqueId, category, disabled } = req.body;
-
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (uniqueId !== undefined) updates.uniqueId = uniqueId;
@@ -513,13 +451,12 @@ router.put('/devices/:id', async (req, res) => {
 
     res.json(device);
   } catch (err) {
-    console.error('Update device error:', err.message);
-    res.status(500).json({ error: 'Erro ao atualizar dispositivo' });
+    next(err);
   }
 });
 
-// DELETE /api/admin/devices/:id - Delete device
-router.delete('/devices/:id', async (req, res) => {
+// DELETE /api/admin/devices/:id
+router.delete('/devices/:id', validateParamInt('id'), async (req, res, next) => {
   try {
     const traccar = new TraccarService(req.app.locals.traccarUrl);
     await traccar.deleteDevice(parseInt(req.params.id));
@@ -532,42 +469,24 @@ router.delete('/devices/:id', async (req, res) => {
 
     res.json({ message: 'Dispositivo deletado' });
   } catch (err) {
-    console.error('Delete device error:', err.message);
-    res.status(500).json({ error: 'Erro ao deletar dispositivo' });
+    next(err);
   }
 });
 
-// POST /api/admin/devices/:id/assign - Assign device to client
-router.post('/devices/:id/assign', async (req, res) => {
+// POST /api/admin/devices/:id/assign
+router.post('/devices/:id/assign', validateParamInt('id'), validate({ clientId: ['required', 'uuid'] }), async (req, res, next) => {
   try {
     const { clientId } = req.body;
-    if (!clientId) {
-      return res.status(400).json({ error: 'clientId é obrigatório' });
-    }
-
     const db = req.app.locals.db;
     const clientResult = await db.query('SELECT id, name, traccar_user_id FROM clients WHERE id = $1', [clientId]);
-    if (clientResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
-    }
+    if (clientResult.rows.length === 0) return res.status(404).json({ error: 'Cliente nao encontrado' });
 
     const client = clientResult.rows[0];
-    if (!client.traccar_user_id) {
-      return res.status(400).json({ error: 'Cliente não tem usuário Traccar vinculado' });
-    }
+    if (!client.traccar_user_id) return res.status(400).json({ error: 'Cliente nao tem usuario Traccar vinculado' });
 
     const traccar = new TraccarService(req.app.locals.traccarUrl);
-    try {
-      await traccar.linkDeviceToUser(client.traccar_user_id, parseInt(req.params.id));
-    } catch (linkErr) {
-      // If already linked (Traccar returns 400), ignore it
-      const traccarMsg = linkErr.response?.data?.message || linkErr.response?.data || linkErr.message;
-      console.error('Traccar link error (may be duplicate):', traccarMsg);
-      if (linkErr.response?.status !== 400) {
-        throw linkErr;
-      }
-      // 400 often means "already linked" - continue
-    }
+    try { await traccar.linkDeviceToUser(client.traccar_user_id, parseInt(req.params.id)); }
+    catch (linkErr) { if (linkErr.response?.status !== 400) throw linkErr; }
 
     await db.query(
       'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
@@ -576,41 +495,24 @@ router.post('/devices/:id/assign', async (req, res) => {
 
     res.json({ message: `Dispositivo vinculado a ${client.name}` });
   } catch (err) {
-    console.error('Assign device error:', err.message, err.response?.data);
-    const msg = err.response?.data?.message || err.message;
-    res.status(500).json({ error: 'Erro ao vincular dispositivo: ' + msg });
+    next(err);
   }
 });
 
-// POST /api/admin/devices/:id/unassign - Unassign device from client
-router.post('/devices/:id/unassign', async (req, res) => {
+// POST /api/admin/devices/:id/unassign
+router.post('/devices/:id/unassign', validateParamInt('id'), validate({ clientId: ['required', 'uuid'] }), async (req, res, next) => {
   try {
     const { clientId } = req.body;
-    if (!clientId) {
-      return res.status(400).json({ error: 'clientId é obrigatório' });
-    }
-
     const db = req.app.locals.db;
     const clientResult = await db.query('SELECT id, name, traccar_user_id FROM clients WHERE id = $1', [clientId]);
-    if (clientResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Cliente não encontrado' });
-    }
+    if (clientResult.rows.length === 0) return res.status(404).json({ error: 'Cliente nao encontrado' });
 
     const client = clientResult.rows[0];
-    if (!client.traccar_user_id) {
-      return res.status(400).json({ error: 'Cliente não tem usuário Traccar vinculado' });
-    }
+    if (!client.traccar_user_id) return res.status(400).json({ error: 'Cliente nao tem usuario Traccar vinculado' });
 
     const traccar = new TraccarService(req.app.locals.traccarUrl);
-    try {
-      await traccar.unlinkDeviceFromUser(client.traccar_user_id, parseInt(req.params.id));
-    } catch (unlinkErr) {
-      const traccarMsg = unlinkErr.response?.data?.message || unlinkErr.response?.data || unlinkErr.message;
-      console.error('Traccar unlink error:', traccarMsg);
-      if (unlinkErr.response?.status !== 400) {
-        throw unlinkErr;
-      }
-    }
+    try { await traccar.unlinkDeviceFromUser(client.traccar_user_id, parseInt(req.params.id)); }
+    catch (unlinkErr) { if (unlinkErr.response?.status !== 400) throw unlinkErr; }
 
     await db.query(
       'INSERT INTO audit_log (user_type, user_id, action, details) VALUES ($1, $2, $3, $4)',
@@ -619,10 +521,8 @@ router.post('/devices/:id/unassign', async (req, res) => {
 
     res.json({ message: 'Dispositivo desvinculado' });
   } catch (err) {
-    console.error('Unassign device error:', err.message, err.response?.data);
-    res.status(500).json({ error: 'Erro ao desvincular dispositivo' });
+    next(err);
   }
 });
 
 module.exports = router;
-
