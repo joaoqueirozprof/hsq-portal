@@ -136,18 +136,28 @@ export default function Reports({ token, onClose }: ReportsProps) {
       const fromISO = new Date(fromDate).toISOString();
       const toISO = new Date(toDate).toISOString();
 
-      const response = await fetch(
-        `/api/tracking/reports/${reportType}/${selectedDevice}?from=${encodeURIComponent(
-          fromISO
-        )}&to=${encodeURIComponent(toISO)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      let response: Response | null = null;
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        response = await fetch(
+          `/api/tracking/reports/${reportType}/${selectedDevice}?from=${encodeURIComponent(
+            fromISO
+          )}&to=${encodeURIComponent(toISO)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (response.status === 503 || response.status === 502) {
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+            continue;
+          }
         }
-      );
+        break;
+      }
 
-      if (!response.ok) {
+      if (!response || !response.ok) {
         throw new Error('Falha ao gerar relatório');
       }
 

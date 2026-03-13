@@ -260,16 +260,26 @@ export default function Replay({ token, onClose }: ReplayProps) {
       const fromISO = new Date(fromDate).toISOString();
       const toISO = new Date(toDate).toISOString();
 
-      const response = await fetch(
-        `/api/tracking/replay/${selectedDevice}?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      let response: Response | null = null;
+      for (let attempt = 0; attempt <= 2; attempt++) {
+        response = await fetch(
+          `/api/tracking/replay/${selectedDevice}?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        if (response.status === 503 || response.status === 502) {
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+            continue;
+          }
         }
-      );
+        break;
+      }
 
-      if (!response.ok) {
+      if (!response || !response.ok) {
         throw new Error('Falha ao carregar dados da rota');
       }
 
@@ -653,7 +663,7 @@ export default function Replay({ token, onClose }: ReplayProps) {
             <TileLayer
               url={TILE_LAYERS[tileLayer].url}
               attribution={TILE_LAYERS[tileLayer].attribution}
-              subdomains={(TILE_LAYERS[tileLayer] as any).subdomains}
+              {...('subdomains' in TILE_LAYERS[tileLayer] ? { subdomains: (TILE_LAYERS[tileLayer] as any).subdomains } : {})}
             />
 
             {/* Full route */}
