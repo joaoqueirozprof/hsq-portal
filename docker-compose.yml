@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # PostgreSQL para usuários e logs
+  hsq-db:
+    image: postgres:15-alpine
+    container_name: hsq-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hsq_portal
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - hsq-db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Backend
+  hsq-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: hsq-api
+    restart: unless-stopped
+    ports:
+      - "4080:4080"
+    environment:
+      PORT: 4080
+      NODE_ENV: production
+      DB_HOST: hsq-db
+      DB_PORT: 5432
+      DB_NAME: hsq_portal
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      TRACCAR_URL: ${TRACCAR_URL:-http://traccar:8082}
+      TRACCAR_TOKEN: ${TRACCAR_TOKEN}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      JWT_EXPIRES_IN: 24h
+      CORS_ORIGIN: https://hsqrastreamento.com.br
+    depends_on:
+      hsq-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Web
+  hsq-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: hsq-web
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    depends_on:
+      - hsq-api
+
+  # Nginx como proxy reverso (opcional, para produção com domínio)
+  nginx:
+    image: nginx:alpine
+    container_name: hsq-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - hsq-api
+      - hsq-web
+
+volumes:
+  hsq-db-data:
+
+networks:
+  default:
+    name: hsq-network
