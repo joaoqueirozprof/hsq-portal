@@ -22,6 +22,8 @@ const ordersRoutes = require('./routes/orders');
 const usersRoutes = require('./routes/users');
 const eventsRoutes = require('./routes/events');
 const realtimeRoutes = require('./routes/realtime');
+const groupsRoutes = require('./routes/groups');
+const serverRoutes = require('./routes/server');
 
 const app = express();
 
@@ -73,20 +75,8 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/realtime', realtimeRoutes);
-
-app.get('/api/server/info', async (req, res) => {
-  try {
-    const { createTraccarClient } = require('./services/traccar');
-    const traccar = createTraccarClient({
-      traccarUrl: process.env.TRACCAR_URL,
-      traccarToken: process.env.TRACCAR_TOKEN
-    });
-    const serverInfo = await traccar.getServer();
-    res.json({ server: serverInfo, api: { version: '2.0.0', traccarVersion: '6.12.2' } });
-  } catch (error) {
-    res.status(503).json({ error: 'Erro ao obter informações do servidor' });
-  }
-});
+app.use('/api/groups', groupsRoutes);
+app.use('/api/server', serverRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Error:', err);
@@ -139,7 +129,7 @@ async function start() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 HSQ Portal API v2.0 rodando na porta ${PORT}`);
     console.log(`📡 Traccar: ${process.env.TRACCAR_URL}`);
-    console.log('✅ Rotas: auth, devices, positions, geofences, reports, drivers, maintenance, commands, notifications, permissions, calendars, attributes, statistics, orders, users, events, realtime');
+    console.log('✅ Rotas: auth, devices, positions, geofences, reports, drivers, maintenance, commands, notifications, permissions, calendars, attributes, statistics, orders, users, events, realtime, groups, server');
   });
 }
 

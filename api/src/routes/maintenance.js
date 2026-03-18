@@ -1,41 +1,29 @@
-/**
- * Routes de Maintenance (Manutenção)
- */
-
 const express = require('express');
 const router = express.Router();
-const pool = require('../config/database');
-
-// GET /api/maintenance - Listar manutenções
+const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { createTraccarClient } = require('../services/traccar');
+router.use(authMiddleware);
+function getTraccar() {
+  return createTraccarClient({ traccarUrl: process.env.TRACCAR_URL, traccarToken: process.env.TRACCAR_TOKEN });
+}
 router.get('/', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM maintenance
-      ORDER BY created_at DESC
-    `);
-    res.json(result.rows || []);
-  } catch (error) {
-    console.error('Get maintenance error:', error.message);
-    res.json([]);
-  }
+  try { const t = getTraccar(); const r = await t.getMaintenances(req.query); res.json(r || []); }
+  catch (e) { console.error('Get maintenance error:', e.message); res.status(503).json({ error: 'Erro ao buscar manutenções' }); }
 });
-
-// POST /api/maintenance - Criar manutenção
-router.post('/', async (req, res) => {
-  try {
-    const { device_id, type, description, due_date, status } = req.body;
-
-    const result = await pool.query(`
-      INSERT INTO maintenance (device_id, type, description, due_date, status)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *
-    `, [device_id, type, description, due_date, status || 'pending']);
-
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Create maintenance error:', error.message);
-    res.status(500).json({ error: 'Erro ao criar manutenção' });
-  }
+router.get('/:id', async (req, res) => {
+  try { const t = getTraccar(); const r = await t.getMaintenance(req.params.id); res.json(r); }
+  catch (e) { res.status(503).json({ error: 'Erro ao buscar manutenção' }); }
 });
-
+router.post('/', adminOnly, async (req, res) => {
+  try { const t = getTraccar(); const r = await t.createMaintenance(req.body); res.status(201).json(r); }
+  catch (e) { console.error('Create maintenance error:', e.message); res.status(503).json({ error: 'Erro ao criar manutenção' }); }
+});
+router.put('/:id', adminOnly, async (req, res) => {
+  try { const t = getTraccar(); const r = await t.updateMaintenance(req.params.id, req.body); res.json(r); }
+  catch (e) { res.status(503).json({ error: 'Erro ao atualizar manutenção' }); }
+});
+router.delete('/:id', adminOnly, async (req, res) => {
+  try { const t = getTraccar(); await t.deleteMaintenance(req.params.id); res.status(204).send(); }
+  catch (e) { res.status(503).json({ error: 'Erro ao deletar manutenção' }); }
+});
 module.exports = router;

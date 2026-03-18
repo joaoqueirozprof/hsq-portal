@@ -5,13 +5,14 @@ import { devicesAPI, positionsAPI } from "../../services/api";
 import {
   LayoutDashboard, Car, MapPin, FileText, Bell, LogOut,
   Menu, X, ChevronRight, Wifi, Shield, Zap, Activity,
-  Users, Wrench, Terminal
+  Users, Wrench, Terminal, Layers
 } from "lucide-react";
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Dashboard", exact: true },
   { path: "/devices", icon: Car, label: "Veículos" },
   { path: "/geofences", icon: MapPin, label: "Geocercas" },
+  { path: "/groups", icon: Layers, label: "Grupos" },
   { path: "/drivers", icon: Users, label: "Motoristas" },
   { path: "/reports", icon: FileText, label: "Relatórios" },
   { path: "/events", icon: Activity, label: "Eventos" },
@@ -47,8 +48,9 @@ export default function Layout() {
   const getPageTitle = () => {
     const map = {
       "/": "Dashboard", "/devices": "Veículos", "/geofences": "Geocercas",
-      "/drivers": "Motoristas", "/reports": "Relatórios", "/events": "Eventos",
-      "/maintenance": "Manutenção", "/commands": "Comandos", "/admin/users": "Usuários"
+      "/groups": "Grupos", "/drivers": "Motoristas", "/reports": "Relatórios",
+      "/events": "Eventos", "/maintenance": "Manutenção", "/commands": "Comandos",
+      "/admin/users": "Usuários"
     };
     return map[location.pathname] || "HSQ Portal";
   };

@@ -8,6 +8,10 @@ import GeofencesPage from "./pages/GeofencesPage";
 import ReportsPage from "./pages/ReportsPage";
 import EventsPage from "./pages/EventsPage";
 import DriversPage from "./pages/DriversPage";
+import MaintenancePage from "./pages/MaintenancePage";
+import CommandsPage from "./pages/CommandsPage";
+import GroupsPage from "./pages/GroupsPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -22,16 +26,9 @@ function PrivateRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
-function ComingSoon({ title }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 animate-fade-in">
-      <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-        <span className="text-2xl">🚧</span>
-      </div>
-      <h2 className="text-lg font-semibold text-slate-300 mb-1">{title}</h2>
-      <p className="text-slate-600 text-sm">Em desenvolvimento — disponível em breve</p>
-    </div>
-  );
+function AdminRoute({ children }) {
+  const { user } = useAuth();
+  return user?.role === "admin" ? children : <Navigate to="/" replace />;
 }
 
 function AppRoutes() {
@@ -45,9 +42,10 @@ function AppRoutes() {
         <Route path="drivers" element={<DriversPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="events" element={<EventsPage />} />
-        <Route path="maintenance" element={<ComingSoon title="Manutenção" />} />
-        <Route path="commands" element={<ComingSoon title="Comandos" />} />
-        <Route path="admin/users" element={<ComingSoon title="Gerenciamento de Usuários" />} />
+        <Route path="maintenance" element={<MaintenancePage />} />
+        <Route path="commands" element={<CommandsPage />} />
+        <Route path="groups" element={<GroupsPage />} />
+        <Route path="admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
         <Route path="map" element={<DashboardPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

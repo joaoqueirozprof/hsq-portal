@@ -157,3 +157,18 @@ export const usersAPI = {
 export const eventsAPI = {
   list: (params) => api.get('/events', { params })
 };
+
+// ==================== GROUPS ====================
+export const groupsAPI = {
+  list: (params) => api.get('/groups', { params }),
+  get: (id) => api.get('/groups/' + id),
+  create: (data) => api.post('/groups', data),
+  update: (id, data) => api.put('/groups/' + id, data),
+  delete: (id) => api.delete('/groups/' + id)
+};
+
+// ==================== SERVER ====================
+export const geocodeAPI = {
+  reverse: (lat, lon) => api.get('/server/geocode', { params: { lat, lon } }),
+  timezones: () => api.get('/server/timezones')
+};
