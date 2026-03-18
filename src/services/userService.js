@@ -66,17 +66,13 @@ class UserService {
     // Registrar login nos logs
     await this.logLogin(user.id, 'success');
 
-    // Determinar para onde redirecionar baseado no role
-    const redirectTo = user.role === 'admin' ? '/admin' : '/cliente';
-
     return {
       token,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
-        redirectTo
+        role: user.role
       }
     };
   }

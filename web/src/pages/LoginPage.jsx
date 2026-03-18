@@ -1,95 +1,74 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Car, Lock, Mail } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
+    if (!email || !password) { setError("Preencha todos os campos"); return; }
+    setLoading(true); setError("");
     try {
       await login(email, password);
-      navigate('/');
+      navigate("/");
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao fazer login');
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.data?.error || "Credenciais inválidas");
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-800">
-      <div className="w-full max-w-md p-8 bg-white rounded-2xl shadow-2xl">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/8 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-orange-500/8 rounded-full blur-3xl" />
+      </div>
+      <div className="relative w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Car className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4" style={{boxShadow:"0 0 24px rgba(37,99,235,0.5)"}}>
+            <Zap size={28} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">HSQ Portal</h1>
-          <p className="text-gray-500">Sistema de Rastreamento GPS</p>
+          <h1 className="text-2xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>HSQ Portal</h1>
+          <p className="text-slate-500 text-sm mt-1">Sistema de Rastreamento</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="card-glass p-8">
+          <h2 className="text-base font-semibold text-slate-100 mb-5">Entrar na plataforma</h2>
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+            <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm animate-slide-up">
               {error}
             </div>
           )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="seu@email.com"
-                required
-              />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="label">Email</label>
+              <div className="relative">
+                <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" className="input pl-10" autoComplete="email" />
+              </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Senha
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="••••••••"
-                required
-              />
+            <div>
+              <label className="label">Senha</label>
+              <div className="relative">
+                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="input pl-10 pr-10" autoComplete="current-password" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
             </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Sistema de gestão de rastreamento veicular</p>
+            <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 mt-1">
+              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><span>Entrar</span><ArrowRight size={15} /></>}
+            </button>
+          </form>
         </div>
+        <p className="text-center text-slate-700 text-xs mt-5">&copy; {new Date().getFullYear()} HSQ Rastreamento</p>
       </div>
     </div>
   );
