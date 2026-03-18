@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Zap, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Zap, Eye, EyeOff, LogIn, Lock, Mail, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { login } = useAuth();
@@ -18,57 +18,101 @@ export default function LoginPage() {
     setLoading(true); setError("");
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (err) {
-      setError(err.response?.data?.error || "Credenciais inválidas");
-    } finally { setLoading(false); }
+      setError(err.response?.data?.error || "E-mail ou senha inválidos");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 flex items-center justify-center p-4">
+      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/8 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-orange-500/8 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-100 rounded-full opacity-60 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-100 rounded-full opacity-60 blur-3xl" />
       </div>
-      <div className="relative w-full max-w-sm">
+
+      <div className="w-full max-w-sm relative z-10">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4" style={{boxShadow:"0 0 24px rgba(37,99,235,0.5)"}}>
-            <Zap size={28} className="text-white" />
+          <div className="inline-flex w-16 h-16 bg-blue-600 rounded-2xl items-center justify-center shadow-lg shadow-blue-200 mb-4">
+            <Zap size={30} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>HSQ Portal</h1>
-          <p className="text-slate-500 text-sm mt-1">Sistema de Rastreamento</p>
+          <h1 className="text-2xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>
+            HSQ Portal
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Rastreamento GPS Inteligente</p>
         </div>
-        <div className="card-glass p-8">
-          <h2 className="text-base font-semibold text-slate-100 mb-5">Entrar na plataforma</h2>
+
+        {/* Card */}
+        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200 border border-slate-100 p-8">
+          <h2 className="text-lg font-semibold text-slate-900 mb-6">Entrar na conta</h2>
+
           {error && (
-            <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm animate-slide-up">
+            <div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm mb-5 animate-fade-in">
+              <AlertCircle size={16} className="flex-shrink-0" />
               {error}
             </div>
           )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Email</label>
+              <label className="label">E-mail</label>
               <div className="relative">
-                <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" className="input pl-10" autoComplete="email" />
+                <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="email"
+                  className="input pl-10"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  autoComplete="email"
+                  autoFocus
+                />
               </div>
             </div>
+
             <div>
               <label className="label">Senha</label>
               <div className="relative">
-                <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="input pl-10 pr-10" autoComplete="current-password" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
-                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type={showPass ? "text" : "password"}
+                  className="input pl-10 pr-10"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(p => !p)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 mt-1">
-              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><span>Entrar</span><ArrowRight size={15} /></>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full btn-primary justify-center py-3 text-base mt-2"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <><LogIn size={18} />Entrar</>
+              )}
             </button>
           </form>
         </div>
-        <p className="text-center text-slate-700 text-xs mt-5">&copy; {new Date().getFullYear()} HSQ Rastreamento</p>
+
+        <p className="text-center text-xs text-slate-400 mt-6">
+          HSQ Rastreamento © {new Date().getFullYear()}
+        </p>
       </div>
     </div>
   );
