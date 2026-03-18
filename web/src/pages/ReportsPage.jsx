@@ -1,308 +1,243 @@
-import { useState, useEffect } from 'react';
-import { reportsAPI, devicesAPI } from '../services/api';
-import { FileText, Download, Calendar, Car, MapPin, Clock, Play, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { reportsAPI, devicesAPI } from "../services/api";
+import {
+  FileText, Download, Calendar, Car, MapPin, Clock,
+  Play, AlertCircle, X, Activity, Layers, BarChart2,
+  RefreshCw
+} from "lucide-react";
 
-const reportTypes = [
-  { id: 'trips', name: 'Viagens', icon: Car, color: 'primary' },
-  { id: 'summary', name: 'Resumo', icon: FileText, color: 'accent' },
-  { id: 'route', name: 'Rota', icon: MapPin, color: 'success' },
-  { id: 'stops', name: 'Paradas', icon: Clock, color: 'warning' },
-  { id: 'events', name: 'Eventos', icon: Calendar, color: 'primary' },
-  { id: 'geofences', name: 'Geocercas', icon: MapPin, color: 'accent' },
+const REPORT_TYPES = [
+  { id: "trips", label: "Viagens", icon: Car, desc: "Distância, velocidade e tempo por viagem" },
+  { id: "summary", label: "Resumo", icon: BarChart2, desc: "Totais por dispositivo no período" },
+  { id: "stops", label: "Paradas", icon: Clock, desc: "Locais e duração das paradas" },
+  { id: "events", label: "Eventos", icon: Activity, desc: "Ignição, alarmes e alertas" },
+  { id: "route", label: "Rota", icon: MapPin, desc: "Pontos GPS percorridos" },
+  { id: "geofences", label: "Geocercas", icon: Layers, desc: "Tempo dentro de áreas" },
 ];
+
+const COL_LABELS = {
+  deviceId: "ID Disp.", deviceName: "Dispositivo", maxSpeed: "Vel. Máx (km/h)",
+  averageSpeed: "Vel. Média (km/h)", distance: "Distância (km)", spentFuel: "Combustível",
+  duration: null, durationFormatted: "Duração", startTime: "Início", endTime: "Fim",
+  startAddress: "Origem", endAddress: "Destino", latitude: "Latitude", longitude: "Longitude",
+  address: "Endereço", engineHours: "Horas Motor", course: "Direção", speed: "Vel. (km/h)",
+  time: "Horário", lat: "Lat", lng: "Lng", geofenceId: "Geocerca ID", type: "Tipo",
+};
+
+function formatValue(key, val) {
+  if (val === null || val === undefined || val === "") return "-";
+  if (key === "duration") return null; // skip raw duration
+  if (key.includes("Time") || key === "time") {
+    try { return new Date(val).toLocaleString("pt-BR"); } catch { return val; }
+  }
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+}
+
+function ReportTable({ data }) {
+  if (!data || data.length === 0) return null;
+  const allKeys = Object.keys(data[0]).filter(k => COL_LABELS[k] !== null);
+  const keys = allKeys.filter(k => COL_LABELS[k] !== undefined || !["duration"].includes(k));
+
+  const exportCSV = () => {
+    const headers = keys.map(k => COL_LABELS[k] || k);
+    const rows = data.map(row => keys.map(k => {
+      const v = row[k];
+      return typeof v === "object" ? JSON.stringify(v) : String(v ?? "");
+    }));
+    const csv = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `relatorio_${Date.now()}.csv`;
+    a.click();
+  };
+
+  return (
+    <div className="card overflow-hidden animate-fade-in">
+      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <p className="text-slate-300 text-sm font-medium">{data.length} registro{data.length !== 1 ? "s" : ""} encontrado{data.length !== 1 ? "s" : ""}</p>
+        <button onClick={exportCSV} className="btn-ghost text-xs flex items-center gap-1.5">
+          <Download size={13} />CSV
+        </button>
+      </div>
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>{keys.map(k => <th key={k}>{COL_LABELS[k] || k}</th>)}</tr>
+          </thead>
+          <tbody>
+            {data.slice(0, 100).map((row, i) => (
+              <tr key={i}>
+                {keys.map(k => {
+                  const formatted = formatValue(k, row[k]);
+                  if (formatted === null) return null;
+                  return (
+                    <td key={k}>
+                      <span className={`text-xs ${k === "deviceName" ? "font-medium text-slate-200" : "text-slate-400"}`}>
+                        {formatted}
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {data.length > 100 && (
+        <div className="p-3 text-center text-xs text-slate-600 border-t border-slate-800">
+          Mostrando 100 de {data.length} registros — exporte o CSV para ver todos
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ReportsPage() {
   const [devices, setDevices] = useState([]);
-  const [selectedReport, setSelectedReport] = useState('trips');
-  const [selectedDevice, setSelectedDevice] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [reportData, setReportData] = useState([]);
+  const [selectedType, setSelectedType] = useState("trips");
+  const [deviceId, setDeviceId] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    return d.toISOString().split("T")[0];
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchDevices = async () => {
-      try {
-        const res = await devicesAPI.list();
-        setDevices(res.data || []);
-      } catch (err) {
-        console.error('Error fetching devices:', err);
-      }
-    };
-    fetchDevices();
-
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    setEndDate(now.toISOString().split('T')[0]);
-    setStartDate(weekAgo.toISOString().split('T')[0]);
+    devicesAPI.list().then(r => setDevices(r.data || [])).catch(() => {});
   }, []);
 
-  const generateReport = async () => {
-    if (!selectedDevice || !startDate || !endDate) {
-      setError('Por favor, selecione o dispositivo e o período');
-      return;
-    }
+  const buildParams = () => ({
+    deviceId: deviceId || undefined,
+    from: dateFrom + "T00:00:00.000Z",
+    to: dateTo + "T23:59:59.000Z",
+  });
 
-    setLoading(true);
-    setError(null);
-
-    const params = {
-      deviceId: selectedDevice,
-      from: startDate,
-      to: endDate,
-    };
-
+  const generate = async () => {
+    if (!deviceId) { setError("Selecione um veículo"); return; }
+    if (!dateFrom || !dateTo) { setError("Informe o período"); return; }
+    setLoading(true); setError(""); setData(null);
     try {
+      const params = buildParams();
       let res;
-      switch (selectedReport) {
-        case 'trips':
-          res = await reportsAPI.getTrips(params);
-          break;
-        case 'summary':
-          res = await reportsAPI.getSummary(params);
-          break;
-        case 'events':
-          res = await reportsAPI.getEvents(params);
-          break;
-        case 'route':
-          res = await reportsAPI.getRoute(params);
-          break;
-        case 'stops':
-          res = await reportsAPI.getStops(params);
-          break;
-        case 'geofences':
-          res = await reportsAPI.getGeofences(params);
-          break;
-        default:
-          res = await reportsAPI.getTrips(params);
+      switch (selectedType) {
+        case "trips":    res = await reportsAPI.getTrips(params); break;
+        case "summary":  res = await reportsAPI.getSummary(params); break;
+        case "events":   res = await reportsAPI.getEvents(params); break;
+        case "route":    res = await reportsAPI.getRoute(params); break;
+        case "stops":    res = await reportsAPI.getStops(params); break;
+        case "geofences": res = await reportsAPI.getGeofences(params); break;
+        default: res = await reportsAPI.getTrips(params);
       }
-      setReportData(res.data || []);
+      setData(res.data || []);
     } catch (err) {
-      setError(err.response?.data?.error || err.message);
-      setReportData([]);
+      setError(err.response?.data?.error || "Erro ao gerar relatório. Verifique se o dispositivo tem dados no período.");
     } finally {
       setLoading(false);
     }
   };
 
-  const exportToCSV = () => {
-    if (reportData.length === 0) return;
-
-    const headers = Object.keys(reportData[0]);
-    const csvContent = [
-      headers.join(','),
-      ...reportData.map(row =>
-        headers.map(header => {
-          const value = row[header];
-          if (typeof value === 'object') return JSON.stringify(value);
-          return String(value);
-        }).join(',')
-      )
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorio_${selectedReport}_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  };
-
-  const currentReport = reportTypes.find(t => t.id === selectedReport);
+  const currentType = REPORT_TYPES.find(t => t.id === selectedType);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-dark-900 font-display">Relatórios</h1>
-        <p className="text-dark-500 text-sm mt-1">
-          Gere relatórios detalhados de acordo com o período selecionado
-        </p>
+        <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Relatórios</h1>
+        <p className="text-slate-500 text-sm mt-0.5">Gere relatórios detalhados por período e veículo</p>
       </div>
 
-      {/* Report Type Selection */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {reportTypes.map((type) => {
-          const Icon = type.icon;
-          const isSelected = selectedReport === type.id;
+      {/* Tipo de relatório */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        {REPORT_TYPES.map(({ id, label, icon: Icon, desc }) => {
+          const active = selectedType === id;
           return (
             <button
-              key={type.id}
-              onClick={() => {
-                setSelectedReport(type.id);
-                setReportData([]);
-              }}
-              className={`
-                p-4 rounded-xl text-center transition-all duration-200
-                ${isSelected
-                  ? `bg-gradient-to-br from-${type.color}-500 to-${type.color}-600 text-white shadow-glow-${type.color === 'primary' ? 'blue' : type.color === 'accent' ? 'orange' : type.color}`
-                  : 'bg-white text-dark-700 hover:bg-dark-50 border border-dark-200'
-                }
-              `}
+              key={id}
+              onClick={() => { setSelectedType(id); setData(null); setError(""); }}
+              className={`p-3 rounded-xl border flex flex-col items-center gap-2 text-center transition-all ${
+                active
+                  ? "bg-blue-600/20 border-blue-600/50 text-blue-400"
+                  : "bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-600"
+              }`}
             >
-              <div className={`inline-flex p-3 rounded-xl mb-2 ${
-                isSelected ? 'bg-white/20' : `bg-${type.color}-500/10`
-              }`}>
-                <Icon size={24} className={isSelected ? 'text-white' : ''} />
-              </div>
-              <span className="font-medium block">{type.name}</span>
+              <Icon size={18} />
+              <span className="text-xs font-medium">{label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Filters Card */}
-      <div className="bg-white rounded-2xl shadow-card p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-1">
-            <label className="block text-sm font-medium text-dark-700 mb-2">Veículo</label>
-            <select
-              value={selectedDevice}
-              onChange={(e) => setSelectedDevice(e.target.value)}
-              className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Selecione...</option>
-              {devices.map((device) => (
-                <option key={device.id} value={device.id}>
-                  {device.name}
-                </option>
-              ))}
+      {/* Descrição do tipo selecionado */}
+      {currentType && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700/50">
+          <currentType.icon size={14} className="text-blue-400" />
+          <span className="text-slate-400 text-xs">{currentType.desc}</span>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="card p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="label">Veículo *</label>
+            <select className="input" value={deviceId} onChange={e => setDeviceId(e.target.value)}>
+              <option value="">Selecione um veículo</option>
+              {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-dark-700 mb-2">Data Início</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+            <label className="label">Data Início</label>
+            <input type="date" className="input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-dark-700 mb-2">Data Fim</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl text-dark-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+            <label className="label">Data Fim</label>
+            <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-
-          <div className="flex items-end gap-3">
-            <button
-              onClick={generateReport}
-              disabled={loading}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Gerando...</span>
-                </>
-              ) : (
-                <>
-                  <Play size={18} />
-                  <span>Gerar Relatório</span>
-                </>
-              )}
+          <div className="flex items-end">
+            <button onClick={generate} disabled={loading} className="btn-primary w-full justify-center">
+              {loading
+                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Gerando...</>
+                : <><Play size={15} />Gerar Relatório</>
+              }
             </button>
-            {reportData.length > 0 && (
-              <button
-                onClick={exportToCSV}
-                className="px-4 py-3 bg-accent-500/10 text-accent-600 rounded-xl hover:bg-accent-500/20 transition-colors"
-                title="Exportar CSV"
-              >
-                <Download size={20} />
-              </button>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Error Alert */}
+      {/* Erro */}
       {error && (
-        <div className="p-4 bg-danger-50 border border-danger-200 rounded-xl text-danger-600 animate-slide-up">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AlertCircle size={20} />
-              <p>{error}</p>
-            </div>
-            <button onClick={() => setError(null)} className="text-danger-400 hover:text-danger-600">
-              <X size={18} />
-            </button>
-          </div>
+        <div className="flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+          <AlertCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+          <p className="text-red-400 text-sm flex-1">{error}</p>
+          <button onClick={() => setError("")} className="text-red-400/60 hover:text-red-400 flex-shrink-0">
+            <X size={16} />
+          </button>
         </div>
       )}
 
-      {/* Report Results */}
-      {reportData.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-card overflow-hidden animate-slide-up">
-          <div className="p-5 border-b border-dark-100 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg bg-${currentReport?.color}-500/10`}>
-                {currentReport && <currentReport.icon size={20} className={`text-${currentReport.color}-500`} />}
-              </div>
-              <div>
-                <h2 className="font-semibold text-dark-900">{currentReport?.name}</h2>
-                <p className="text-sm text-dark-500">
-                  {reportData.length} registro{reportData.length !== 1 ? 's' : ''} encontrado{reportData.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-dark-50">
-                <tr>
-                  {Object.keys(reportData[0] || {}).map((key) => (
-                    <th
-                      key={key}
-                      className="px-5 py-3 text-left text-xs font-medium text-dark-500 uppercase tracking-wider"
-                    >
-                      {key}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-dark-100">
-                {reportData.slice(0, 50).map((row, index) => (
-                  <tr key={index} className="hover:bg-dark-50/50 transition-colors">
-                    {Object.values(row).map((value, i) => (
-                      <td key={i} className="px-5 py-4 text-sm text-dark-700">
-                        {typeof value === 'object'
-                          ? JSON.stringify(value)
-                          : String(value)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {reportData.length > 50 && (
-            <div className="p-4 text-center text-sm text-dark-500 border-t border-dark-100">
-              Mostrando 50 de {reportData.length} registros
-            </div>
-          )}
+      {/* Resultado */}
+      {data !== null && data.length === 0 && !loading && (
+        <div className="card p-12 text-center">
+          <FileText size={36} className="mx-auto text-slate-700 mb-3" />
+          <p className="text-slate-500 text-sm">Nenhum dado encontrado no período selecionado</p>
+          <p className="text-slate-600 text-xs mt-1">Tente ampliar o intervalo de datas</p>
         </div>
       )}
 
-      {/* Empty State */}
-      {reportData.length === 0 && !loading && !error && (
-        <div className="bg-white rounded-2xl shadow-card p-12 text-center">
-          <div className="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <FileText size={40} className="text-dark-300" />
+      {data && data.length > 0 && <ReportTable data={data} />}
+
+      {/* Estado inicial */}
+      {data === null && !loading && !error && (
+        <div className="card p-12 text-center">
+          <div className="w-14 h-14 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <FileText size={28} className="text-slate-600" />
           </div>
-          <h3 className="text-lg font-semibold text-dark-700 mb-2">
-            Selecione os filtros e gere seu relatório
-          </h3>
-          <p className="text-dark-500">
-            Escolha o veículo, período e tipo de relatório para visualizar os dados
-          </p>
+          <p className="text-slate-400 text-sm font-medium">Selecione o veículo e o período</p>
+          <p className="text-slate-600 text-xs mt-1">Depois clique em "Gerar Relatório"</p>
         </div>
       )}
     </div>
