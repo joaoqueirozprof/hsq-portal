@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useToast } from "../context/ToastContext";
 import { api } from "../services/api";
 import { Layers, Plus, Edit2, Trash2, Search, RefreshCw, Car } from "lucide-react";
 
@@ -27,8 +28,8 @@ function GroupModal({ group, onClose, onSave }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">{group ? "Editar Grupo" : "Novo Grupo"}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">{group ? "Editar Grupo" : "Novo Grupo"}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -62,6 +63,7 @@ export default function GroupsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editGroup, setEditGroup] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const toast = useToast();
 
   const fetchData = async () => {
     setLoading(true);
@@ -87,7 +89,7 @@ export default function GroupsPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Grupos</h1>
+          <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Grupos</h1>
           <p className="text-slate-500 text-sm mt-0.5">{groups.length} grupos cadastrados</p>
         </div>
         <div className="flex gap-2">
@@ -118,14 +120,14 @@ export default function GroupsPage() {
             const count = getDeviceCount(group.id);
             const groupDevices = devices.filter(d => d.groupId === group.id).slice(0, 3);
             return (
-              <div key={group.id} className="card p-4 hover:border-slate-700 transition-colors">
+              <div key={group.id} className="card p-4 hover:border-slate-200 transition-colors">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
                       <Layers size={18} className="text-indigo-400" />
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-100 text-sm">{group.name}</p>
+                      <p className="font-semibold text-slate-900 text-sm">{group.name}</p>
                       {group.attributes?.description && <p className="text-slate-600 text-xs">{group.attributes.description}</p>}
                     </div>
                   </div>
@@ -135,16 +137,16 @@ export default function GroupsPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-slate-800">
+                <div className="mt-3 pt-3 border-t border-slate-200">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-slate-600 text-xs flex items-center gap-1.5"><Car size={11} />{count} veículo{count !== 1 ? "s" : ""}</span>
                   </div>
                   {groupDevices.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {groupDevices.map(d => (
-                        <span key={d.id} className="px-2 py-0.5 bg-slate-800 rounded-md text-slate-400 text-xs">{d.name}</span>
+                        <span key={d.id} className="px-2 py-0.5 bg-slate-100 rounded-md text-slate-400 text-xs">{d.name}</span>
                       ))}
-                      {count > 3 && <span className="px-2 py-0.5 bg-slate-800 rounded-md text-slate-600 text-xs">+{count - 3} mais</span>}
+                      {count > 3 && <span className="px-2 py-0.5 bg-slate-100 rounded-md text-slate-600 text-xs">+{count - 3} mais</span>}
                     </div>
                   )}
                 </div>
@@ -161,7 +163,7 @@ export default function GroupsPage() {
           <div className="modal max-w-sm">
             <div className="modal-body text-center py-8">
               <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4"><Trash2 size={20} className="text-red-500" /></div>
-              <h3 className="font-semibold text-slate-100 mb-1">Confirmar exclusão</h3>
+              <h3 className="font-semibold text-slate-900 mb-1">Confirmar exclusão</h3>
               <p className="text-slate-500 text-sm">Os veículos do grupo não serão excluídos.</p>
             </div>
             <div className="modal-footer">

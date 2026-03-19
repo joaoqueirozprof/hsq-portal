@@ -12,8 +12,7 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - hsq-db-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports removed - DB only accessible internally
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -41,7 +40,7 @@ services:
       DB_PASSWORD: postgres
       TRACCAR_URL: ${TRACCAR_URL:-http://host.docker.internal:8082}
       TRACCAR_TOKEN: ${TRACCAR_TOKEN}
-      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      JWT_SECRET: ${JWT_SECRET:-c3bec253e4221ab0e44d459672fe45d2a16785869658ec171c02fbd35b21c3f2}
       JWT_EXPIRES_IN: 24h
       CORS_ORIGIN: https://hsqrastreamento.com.br
     depends_on:

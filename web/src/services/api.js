@@ -18,6 +18,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Interceptor para tratar token expirado (401)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ==================== AUTENTICAÇÃO ====================
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
@@ -108,35 +123,9 @@ export const permissionsAPI = {
   remove: (data) => api.delete('/permissions', { data })
 };
 
-// ==================== CALENDARS ====================
-export const calendarsAPI = {
-  list: (params) => api.get('/calendars', { params }),
-  get: (id) => api.get(`/calendars/${id}`),
-  create: (data) => api.post('/calendars', data),
-  update: (id, data) => api.put(`/calendars/${id}`, data),
-  delete: (id) => api.delete(`/calendars/${id}`)
-};
-
-// ==================== ATTRIBUTES ====================
-export const attributesAPI = {
-  list: (params) => api.get('/attributes', { params }),
-  create: (data) => api.post('/attributes', data),
-  update: (id, data) => api.put(`/attributes/${id}`, data),
-  delete: (id) => api.delete(`/attributes/${id}`)
-};
-
 // ==================== STATISTICS ====================
 export const statisticsAPI = {
   get: (from, to) => api.get('/statistics', { params: { from, to } })
-};
-
-// ==================== ORDERS ====================
-export const ordersAPI = {
-  list: (params) => api.get('/orders', { params }),
-  get: (id) => api.get(`/orders/${id}`),
-  create: (data) => api.post('/orders', data),
-  update: (id, data) => api.put(`/orders/${id}`, data),
-  delete: (id) => api.delete(`/orders/${id}`)
 };
 
 // ==================== SERVIDOR ====================
@@ -167,8 +156,3 @@ export const groupsAPI = {
   delete: (id) => api.delete('/groups/' + id)
 };
 
-// ==================== SERVER ====================
-export const geocodeAPI = {
-  reverse: (lat, lon) => api.get('/server/geocode', { params: { lat, lon } }),
-  timezones: () => api.get('/server/timezones')
-};

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { devicesAPI } from "../services/api";
+import { useToast } from "../context/ToastContext";
 import { Car, Plus, Search, Edit2, Trash2, RefreshCw } from "lucide-react";
 
 function DeviceModal({ device, onClose, onSave }) {
@@ -32,8 +33,8 @@ function DeviceModal({ device, onClose, onSave }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">{device ? "Editar Veículo" : "Novo Veículo"}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 transition-colors text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">{device ? "Editar Veículo" : "Novo Veículo"}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 transition-colors text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -92,6 +93,9 @@ export default function DevicesPage() {
   const [modalDevice, setModalDevice] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const toast = useToast();
+  const [page, setPage] = useState(1);
+  const perPage = 20;
 
   const fetchDevices = async () => {
     try { const res = await devicesAPI.list(); setDevices(res.data || []); }
@@ -102,7 +106,7 @@ export default function DevicesPage() {
   useEffect(() => { fetchDevices(); }, []);
 
   const handleDelete = async (id) => {
-    try { await devicesAPI.delete(id); setDevices(p => p.filter(d => d.id !== id)); setDeleteId(null); }
+    try { await devicesAPI.delete(id); setDevices(p => p.filter(d => d.id !== id)); setDeleteId(null); toast.success("Veiculo excluido"); }
     catch (e) { console.error(e); }
   };
 
@@ -116,7 +120,7 @@ export default function DevicesPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Veículos</h1>
+          <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Veículos</h1>
           <p className="text-slate-500 text-sm mt-0.5">{devices.length} cadastrados · {devices.filter(d=>d.status==="online").length} online</p>
         </div>
         <div className="flex gap-2">
@@ -130,12 +134,12 @@ export default function DevicesPage() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input className="input pl-10" placeholder="Buscar por nome ou IMEI..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="input pl-10" placeholder="Buscar por nome ou IMEI..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
         <div className="flex gap-2">
           {["all","online","offline"].map(f => (
-            <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
-              filter === f ? "bg-blue-600/20 text-blue-400 border-blue-600/30" : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-100"
+            <button key={f} onClick={() => { setFilter(f); setPage(1); }} className={`px-4 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+              filter === f ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-100 text-slate-400 border-slate-200 hover:text-slate-900"
             }`}>
               {f === "all" ? "Todos" : f === "online" ? "Online" : "Offline"}
             </button>
@@ -153,14 +157,14 @@ export default function DevicesPage() {
             <table className="table">
               <thead><tr><th>Veículo</th><th>IMEI</th><th>Status</th><th>Categoria</th><th>Telefone</th><th>Última atualização</th><th></th></tr></thead>
               <tbody>
-                {filtered.map(device => (
+                {filtered.slice((page-1)*perPage, page*perPage).map(device => (
                   <tr key={device.id}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${device.status==="online" ? "bg-green-500/15" : "bg-slate-800"}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${device.status==="online" ? "bg-green-50" : "bg-slate-100"}`}>
                           <Car size={14} className={device.status==="online" ? "text-green-500" : "text-slate-600"} />
                         </div>
-                        <span className="font-medium text-slate-100 text-sm">{device.name}</span>
+                        <span className="font-medium text-slate-900 text-sm">{device.name}</span>
                       </div>
                     </td>
                     <td><span className="font-mono text-slate-500 text-xs">{device.uniqueId}</span></td>
@@ -185,16 +189,27 @@ export default function DevicesPage() {
             </table>
           </div>
         )}
+        {filtered.length > perPage && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
+            <span className="text-xs text-slate-400">{(page-1)*perPage+1}-{Math.min(page*perPage, filtered.length)} de {filtered.length}</span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page===1}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed">Anterior</button>
+              <button onClick={() => setPage(p => Math.min(Math.ceil(filtered.length/perPage), p+1))} disabled={page >= Math.ceil(filtered.length/perPage)}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed">Próximo</button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {showModal && <DeviceModal device={modalDevice} onClose={() => { setShowModal(false); setModalDevice(null); }} onSave={() => { setShowModal(false); setModalDevice(null); fetchDevices(); }} />}
+      {showModal && <DeviceModal device={modalDevice} onClose={() => { setShowModal(false); setModalDevice(null); }} onSave={() => { setShowModal(false); setModalDevice(null); fetchDevices(); toast.success("Veiculo salvo com sucesso"); }} />}
 
       {deleteId && (
         <div className="modal-overlay">
           <div className="modal max-w-sm">
             <div className="modal-body text-center py-8">
               <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4"><Trash2 size={20} className="text-red-500" /></div>
-              <h3 className="font-semibold text-slate-100 mb-1">Confirmar exclusão</h3>
+              <h3 className="font-semibold text-slate-900 mb-1">Confirmar exclusão</h3>
               <p className="text-slate-500 text-sm">Esta ação não pode ser desfeita.</p>
             </div>
             <div className="modal-footer">

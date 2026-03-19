@@ -23,6 +23,12 @@ function SendCommandModal({ devices, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.deviceId) { setError("Selecione um dispositivo"); return; }
+    // Safety check for dangerous commands
+    if ((form.type === "engineStop" || form.type === "engineResume") && !window.confirm(
+      form.type === "engineStop"
+        ? "ATENCAO: Voce esta prestes a BLOQUEAR O MOTOR do veiculo. Se o veiculo estiver em movimento, isso pode causar um acidente. Deseja continuar?"
+        : "Voce esta prestes a DESBLOQUEAR O MOTOR do veiculo. Deseja continuar?"
+    )) return;
     setLoading(true); setError(""); setResult(null);
     try {
       const payload = {
@@ -41,8 +47,8 @@ function SendCommandModal({ devices, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">Enviar Comando</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">Enviar Comando</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -61,6 +67,12 @@ function SendCommandModal({ devices, onClose }) {
                 {COMMAND_TYPES_DEFAULT.map(t => <option key={t.type} value={t.type}>{t.description}</option>)}
               </select>
             </div>
+            {(form.type === "engineStop" || form.type === "engineResume") && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                <span>{form.type === "engineStop" ? "Este comando BLOQUEARA o motor do veiculo. Use com extrema cautela." : "Este comando DESBLOQUEARA o motor do veiculo."}</span>
+              </div>
+            )}
             {form.type === "custom" && (
               <div>
                 <label className="label">Dados do Comando</label>
@@ -81,6 +93,8 @@ function SendCommandModal({ devices, onClose }) {
 }
 
 export default function CommandsPage() {
+  // Extra safety for dangerous commands
+  const DANGER_CMDS = ["engineStop", "engineResume"];
   const [devices, setDevices] = useState([]);
   const [commands, setCommands] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +125,7 @@ export default function CommandsPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Comandos</h1>
+          <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Comandos</h1>
           <p className="text-slate-500 text-sm mt-0.5">{commands.length} comandos salvos</p>
         </div>
         <div className="flex gap-2">
@@ -149,7 +163,7 @@ export default function CommandsPage() {
 
       {/* Comandos salvos */}
       <div className="card overflow-hidden">
-        <div className="p-4 border-b border-slate-800">
+        <div className="p-4 border-b border-slate-200">
           <h2 className="text-sm font-semibold text-slate-300">Comandos Salvos no Traccar</h2>
           <p className="text-xs text-slate-600 mt-0.5">Comandos pré-configurados para envio rápido</p>
         </div>
@@ -173,7 +187,7 @@ export default function CommandsPage() {
                         <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
                           <Terminal size={14} className="text-purple-400" />
                         </div>
-                        <span className="font-medium text-slate-100 text-sm">{cmd.description || cmd.type}</span>
+                        <span className="font-medium text-slate-900 text-sm">{cmd.description || cmd.type}</span>
                       </div>
                     </td>
                     <td><span className="text-slate-400 text-xs">{cmd.deviceId ? deviceName(cmd.deviceId) : "Todos"}</span></td>

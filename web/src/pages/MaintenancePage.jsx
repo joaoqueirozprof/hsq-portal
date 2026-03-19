@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
+import { useToast } from "../context/ToastContext";
 import { Wrench, Plus, Edit2, Trash2, Search, RefreshCw, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 
 const TYPE_OPTIONS = [
@@ -23,8 +24,8 @@ function MaintenanceModal({ item, onClose, onSave }) {
   const [form, setForm] = useState({
     name: item?.name || "",
     type: item?.type || "oilChange",
-    start: item?.start || 0,
-    period: item?.period || 0,
+    start: item?.start ? item.start / 1000 : 0,
+    period: item?.period ? item.period / 1000 : 0,
     attributes: { description: item?.attributes?.description || "" }
   });
   const [loading, setLoading] = useState(false);
@@ -35,7 +36,7 @@ function MaintenanceModal({ item, onClose, onSave }) {
     if (!form.name) { setError("Nome é obrigatório"); return; }
     setLoading(true); setError("");
     try {
-      const payload = { ...form, start: Number(form.start), period: Number(form.period) };
+      const payload = { ...form, start: Number(form.start) * 1000, period: Number(form.period) * 1000 };
       if (item) { await api.put(`/maintenance/${item.id}`, payload); }
       else { await api.post("/maintenance", payload); }
       onSave();
@@ -47,8 +48,8 @@ function MaintenanceModal({ item, onClose, onSave }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">{item ? "Editar Manutenção" : "Nova Manutenção"}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">{item ? "Editar Manutenção" : "Nova Manutenção"}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -97,6 +98,7 @@ export default function MaintenancePage() {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const toast = useToast();
 
   const fetchItems = async () => {
     setLoading(true);
@@ -119,7 +121,7 @@ export default function MaintenancePage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Manutenção</h1>
+          <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Manutenção</h1>
           <p className="text-slate-500 text-sm mt-0.5">{items.length} registros</p>
         </div>
         <div className="flex gap-2">
@@ -159,7 +161,7 @@ export default function MaintenancePage() {
                             <Wrench size={14} className="text-orange-400" />
                           </div>
                           <div>
-                            <p className="font-medium text-slate-100 text-sm">{item.name}</p>
+                            <p className="font-medium text-slate-900 text-sm">{item.name}</p>
                             {item.attributes?.description && <p className="text-slate-600 text-xs">{item.attributes.description}</p>}
                           </div>
                         </div>
@@ -188,14 +190,14 @@ export default function MaintenancePage() {
         )}
       </div>
 
-      {showModal && <MaintenanceModal item={editItem} onClose={() => { setShowModal(false); setEditItem(null); }} onSave={() => { setShowModal(false); setEditItem(null); fetchItems(); }} />}
+      {showModal && <MaintenanceModal item={editItem} onClose={() => { setShowModal(false); setEditItem(null); }} onSave={() => { setShowModal(false); setEditItem(null); fetchItems(); toast.success("Manutencao salva"); }} />}
 
       {deleteId && (
         <div className="modal-overlay">
           <div className="modal max-w-sm">
             <div className="modal-body text-center py-8">
               <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4"><Trash2 size={20} className="text-red-500" /></div>
-              <h3 className="font-semibold text-slate-100 mb-1">Confirmar exclusão</h3>
+              <h3 className="font-semibold text-slate-900 mb-1">Confirmar exclusão</h3>
               <p className="text-slate-500 text-sm">Esta ação não pode ser desfeita.</p>
             </div>
             <div className="modal-footer">

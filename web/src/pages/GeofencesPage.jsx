@@ -102,8 +102,8 @@ function GeofenceModal({ geofence, onClose, onSave }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{maxWidth: "700px", width: "95vw"}}>
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">{geofence ? "Editar Geocerca" : "Nova Geocerca"}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">{geofence ? "Editar Geocerca" : "Nova Geocerca"}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -122,11 +122,11 @@ function GeofenceModal({ geofence, onClose, onSave }) {
               <label className="label">Tipo de Área</label>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setForm({...form, areaType: "circle"})}
-                  className={`flex-1 py-2 px-3 rounded-xl border text-xs flex items-center justify-center gap-2 transition-colors ${form.areaType === "circle" ? "bg-blue-600/20 border-blue-600/50 text-blue-400" : "bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300"}`}>
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs flex items-center justify-center gap-2 transition-colors ${form.areaType === "circle" ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-700"}`}>
                   <Circle size={14} />Círculo
                 </button>
                 <button type="button" onClick={() => setForm({...form, areaType: "polygon"})}
-                  className={`flex-1 py-2 px-3 rounded-xl border text-xs flex items-center justify-center gap-2 transition-colors ${form.areaType === "polygon" ? "bg-purple-600/20 border-purple-600/50 text-purple-400" : "bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300"}`}>
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs flex items-center justify-center gap-2 transition-colors ${form.areaType === "polygon" ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-700"}`}>
                   <Square size={14} />Polígono (WKT)
                 </button>
               </div>
@@ -134,7 +134,7 @@ function GeofenceModal({ geofence, onClose, onSave }) {
             {form.areaType === "circle" ? (
               <>
                 <p className="text-xs text-slate-600">Clique no mapa para definir o centro, ou informe as coordenadas manualmente.</p>
-                <div className="rounded-xl overflow-hidden border border-slate-700" style={{height: "220px"}}>
+                <div className="rounded-xl overflow-hidden border border-slate-200" style={{height: "220px"}}>
                   <MapContainer center={mapCenter} zoom={preview ? 12 : 5} style={{height: "100%", width: "100%"}}>
                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                     <MapClickHandler onMapClick={handleMapClick} />
@@ -214,16 +214,16 @@ export default function GeofencesPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Geocercas</h1>
+          <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Geocercas</h1>
           <p className="text-slate-500 text-sm mt-0.5">{geofences.length} cadastradas</p>
         </div>
         <div className="flex gap-2">
           <button onClick={fetchGeofences} className="btn-ghost"><RefreshCw size={15} /></button>
-          <div className="flex rounded-xl overflow-hidden border border-slate-700">
-            <button onClick={() => setView("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${view === "list" ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-500 hover:text-slate-300"}`}>
+          <div className="flex rounded-xl overflow-hidden border border-slate-200">
+            <button onClick={() => setView("list")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${view === "list" ? "bg-slate-200 text-slate-900" : "bg-slate-100 text-slate-500 hover:text-slate-700"}`}>
               <List size={13} />Lista
             </button>
-            <button onClick={() => setView("map")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${view === "map" ? "bg-slate-700 text-slate-100" : "bg-slate-800 text-slate-500 hover:text-slate-300"}`}>
+            <button onClick={() => setView("map")} className={`px-3 py-2 text-xs flex items-center gap-1.5 transition-colors ${view === "map" ? "bg-slate-200 text-slate-900" : "bg-slate-100 text-slate-500 hover:text-slate-700"}`}>
               <Map size={13} />Mapa
             </button>
           </div>
@@ -289,7 +289,7 @@ export default function GeofencesPage() {
                               <MapPin size={14} className="text-purple-400" />
                             </div>
                             <div>
-                              <p className="font-medium text-slate-100 text-sm">{geofence.name}</p>
+                              <p className="font-medium text-slate-900 text-sm">{geofence.name}</p>
                               {geofence.description && <p className="text-slate-600 text-xs">{geofence.description}</p>}
                             </div>
                           </div>
@@ -327,7 +327,7 @@ export default function GeofencesPage() {
           <div className="modal max-w-sm">
             <div className="modal-body text-center py-8">
               <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4"><Trash2 size={20} className="text-red-500" /></div>
-              <h3 className="font-semibold text-slate-100 mb-1">Confirmar exclusão</h3>
+              <h3 className="font-semibold text-slate-900 mb-1">Confirmar exclusão</h3>
               <p className="text-slate-500 text-sm">Esta ação não pode ser desfeita.</p>
             </div>
             <div className="modal-footer">

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ToastProvider } from "./context/ToastContext";
 import Layout from "./components/Layout/Layout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -12,11 +13,12 @@ import MaintenancePage from "./pages/MaintenancePage";
 import CommandsPage from "./pages/CommandsPage";
 import GroupsPage from "./pages/GroupsPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import TrackingPage from "./pages/TrackingPage";
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div className="flex items-center justify-center h-screen bg-slate-950">
+    <div className="flex items-center justify-center h-screen bg-slate-50">
       <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
         <p className="text-slate-500 text-sm">Carregando...</p>
@@ -45,10 +47,18 @@ function AppRoutes() {
         <Route path="maintenance" element={<MaintenancePage />} />
         <Route path="commands" element={<CommandsPage />} />
         <Route path="groups" element={<GroupsPage />} />
+        <Route path="tracking" element={<TrackingPage />} />
         <Route path="admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
-        <Route path="map" element={<DashboardPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={
+        <div className="flex items-center justify-center h-screen bg-slate-50">
+          <div className="text-center">
+            <p className="text-6xl font-black text-slate-200 mb-2">404</p>
+            <p className="text-slate-500 text-sm mb-4">Pagina nao encontrada</p>
+            <a href="/" className="text-blue-600 text-sm font-medium hover:underline">Voltar ao Dashboard</a>
+          </div>
+        </div>
+      } />
     </Routes>
   );
 }
@@ -57,7 +67,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

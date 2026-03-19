@@ -22,14 +22,7 @@ class TraccarClient {
       }
     });
 
-    // Interceptor para logging de requisições
-    this.client.interceptors.request.use(
-      (config) => {
-        console.log(`[Traccar API] ${config.method?.toUpperCase()} ${config.url}`);
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
+    // Request logging (only errors)
 
     // Interceptor para tratamento de erros
     this.client.interceptors.response.use(
@@ -195,27 +188,27 @@ class TraccarClient {
   // ==================== Manutenção ====================
 
   async getMaintenances(params = {}) {
-    const response = await this.client.get('/api/maintenances', { params });
+    const response = await this.client.get('/api/maintenance', { params });
     return response.data;
   }
 
   async getMaintenance(id) {
-    const response = await this.client.get(`/api/maintenances/${id}`);
+    const response = await this.client.get(`/api/maintenance/${id}`);
     return response.data;
   }
 
   async createMaintenance(data) {
-    const response = await this.client.post('/api/maintenances', data);
+    const response = await this.client.post('/api/maintenance', data);
     return response.data;
   }
 
   async updateMaintenance(id, data) {
-    const response = await this.client.put(`/api/maintenances/${id}`, data);
+    const response = await this.client.put(`/api/maintenance/${id}`, data);
     return response.data;
   }
 
   async deleteMaintenance(id) {
-    await this.client.delete(`/api/maintenances/${id}`);
+    await this.client.delete(`/api/maintenance/${id}`);
   }
 
   // ==================== Eventos ====================
@@ -320,8 +313,34 @@ class TraccarClient {
   }
 }
 
-// Factory function para criar instância com configuração
+// Singleton instance (reused across all requests)
+let _instance = null;
+let _reportInstance = null;
+
 function createTraccarClient(config) {
+  if (!config || !config.timeout || config.timeout === 30000) {
+    // Default instance - singleton
+    if (!_instance) {
+      _instance = new TraccarClient({
+        traccarUrl: config?.TRACCAR_URL || config?.traccarUrl || process.env.TRACCAR_URL,
+        traccarToken: config?.TRACCAR_TOKEN || config?.traccarToken || process.env.TRACCAR_TOKEN,
+        timeout: 30000
+      });
+    }
+    return _instance;
+  }
+  // Report instance with longer timeout - also cached
+  if (config.timeout >= 60000) {
+    if (!_reportInstance) {
+      _reportInstance = new TraccarClient({
+        traccarUrl: config.TRACCAR_URL || config.traccarUrl || process.env.TRACCAR_URL,
+        traccarToken: config.TRACCAR_TOKEN || config.traccarToken || process.env.TRACCAR_TOKEN,
+        timeout: config.timeout
+      });
+    }
+    return _reportInstance;
+  }
+  // Custom timeout - create new (rare)
   return new TraccarClient({
     traccarUrl: config.TRACCAR_URL || config.traccarUrl,
     traccarToken: config.TRACCAR_TOKEN || config.traccarToken,

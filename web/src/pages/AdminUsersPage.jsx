@@ -16,6 +16,7 @@ function UserModal({ user, onClose, onSave }) {
     e.preventDefault();
     if (!form.name || !form.email) { setError("Nome e e-mail são obrigatórios"); return; }
     if (!user && !form.password) { setError("Senha obrigatória para novo usuário"); return; }
+      if (form.password && form.password.length < 6) { setError("Senha deve ter no mínimo 6 caracteres"); return; }
     setLoading(true); setError("");
     try {
       const payload = { name: form.name, email: form.email, role: form.role };
@@ -31,8 +32,8 @@ function UserModal({ user, onClose, onSave }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">{user ? "Editar Usuário" : "Novo Usuário"}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">{user ? "Editar Usuário" : "Novo Usuário"}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -90,8 +91,8 @@ function ResetPasswordModal({ user, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal max-w-sm">
         <div className="modal-header">
-          <h3 className="font-semibold text-slate-100">Redefinir Senha</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-100 text-lg leading-none">&times;</button>
+          <h3 className="font-semibold text-slate-900">Redefinir Senha</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900 text-lg leading-none">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
@@ -100,7 +101,7 @@ function ResetPasswordModal({ user, onClose }) {
             ) : (
               <>
                 {error && <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{error}</div>}
-                <p className="text-slate-400 text-sm">Definir nova senha para <strong className="text-slate-200">{user.name}</strong></p>
+                <p className="text-slate-400 text-sm">Definir nova senha para <strong className="text-slate-800">{user.name}</strong></p>
                 <div>
                   <label className="label">Nova Senha</label>
                   <input type="password" className="input" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoFocus />
@@ -155,7 +156,7 @@ export default function AdminUsersPage() {
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Usuários do Portal</h1>
+          <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Usuários do Portal</h1>
           <p className="text-slate-500 text-sm mt-0.5">{users.length} usuários cadastrados</p>
         </div>
         <div className="flex gap-2">
@@ -170,15 +171,15 @@ export default function AdminUsersPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="card p-4">
           <p className="text-slate-500 text-xs">Total</p>
-          <p className="text-2xl font-bold text-slate-100 mt-1">{users.length}</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{users.length}</p>
         </div>
         <div className="card p-4">
           <p className="text-slate-500 text-xs">Admins</p>
-          <p className="text-2xl font-bold text-yellow-400 mt-1">{users.filter(u => u.role === "admin").length}</p>
+          <p className="text-2xl font-bold text-amber-600 mt-1">{users.filter(u => u.role === "admin").length}</p>
         </div>
         <div className="card p-4">
           <p className="text-slate-500 text-xs">Usuários</p>
-          <p className="text-2xl font-bold text-blue-400 mt-1">{users.filter(u => u.role === "user").length}</p>
+          <p className="text-2xl font-bold text-blue-600 mt-1">{users.filter(u => u.role === "user").length}</p>
         </div>
       </div>
 
@@ -202,14 +203,14 @@ export default function AdminUsersPage() {
                     <td>
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${user.role === "admin" ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-blue-600/10 border border-blue-600/20"}`}>
-                          {user.role === "admin" ? <Crown size={14} className="text-yellow-400" /> : <User size={14} className="text-blue-400" />}
+                          {user.role === "admin" ? <Crown size={14} className="text-amber-600" /> : <User size={14} className="text-blue-600" />}
                         </div>
-                        <span className="font-medium text-slate-100 text-sm">{user.name}</span>
+                        <span className="font-medium text-slate-900 text-sm">{user.name}</span>
                       </div>
                     </td>
                     <td><span className="text-slate-400 text-xs">{user.email}</span></td>
                     <td>
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg border text-xs font-medium ${user.role === "admin" ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" : "bg-blue-500/10 text-blue-400 border-blue-500/20"}`}>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg border text-xs font-medium ${user.role === "admin" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                         {user.role === "admin" ? "Admin" : "Usuário"}
                       </span>
                     </td>
@@ -237,7 +238,7 @@ export default function AdminUsersPage() {
           <div className="modal max-w-sm">
             <div className="modal-body text-center py-8">
               <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4"><Trash2 size={20} className="text-red-500" /></div>
-              <h3 className="font-semibold text-slate-100 mb-1">Confirmar exclusão</h3>
+              <h3 className="font-semibold text-slate-900 mb-1">Confirmar exclusão</h3>
               <p className="text-slate-500 text-sm">O usuário perderá acesso ao portal.</p>
             </div>
             <div className="modal-footer">

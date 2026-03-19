@@ -55,7 +55,7 @@ function ReportTable({ data }) {
 
   return (
     <div className="card overflow-hidden animate-fade-in">
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
         <p className="text-slate-300 text-sm font-medium">{data.length} registro{data.length !== 1 ? "s" : ""} encontrado{data.length !== 1 ? "s" : ""}</p>
         <button onClick={exportCSV} className="btn-ghost text-xs flex items-center gap-1.5">
           <Download size={13} />CSV
@@ -74,7 +74,7 @@ function ReportTable({ data }) {
                   if (formatted === null) return null;
                   return (
                     <td key={k}>
-                      <span className={`text-xs ${k === "deviceName" ? "font-medium text-slate-200" : "text-slate-400"}`}>
+                      <span className={`text-xs ${k === "deviceName" ? "font-medium text-slate-800" : "text-slate-400"}`}>
                         {formatted}
                       </span>
                     </td>
@@ -86,7 +86,7 @@ function ReportTable({ data }) {
         </table>
       </div>
       {data.length > 100 && (
-        <div className="p-3 text-center text-xs text-slate-600 border-t border-slate-800">
+        <div className="p-3 text-center text-xs text-slate-600 border-t border-slate-200">
           Mostrando 100 de {data.length} registros — exporte o CSV para ver todos
         </div>
       )}
@@ -146,7 +146,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold text-slate-100" style={{fontFamily:"Space Grotesk,sans-serif"}}>Relatórios</h1>
+        <h1 className="text-xl font-bold text-slate-900" style={{fontFamily:"Space Grotesk,sans-serif"}}>Relatórios</h1>
         <p className="text-slate-500 text-sm mt-0.5">Gere relatórios detalhados por período e veículo</p>
       </div>
 
@@ -160,8 +160,8 @@ export default function ReportsPage() {
               onClick={() => { setSelectedType(id); setData(null); setError(""); }}
               className={`p-3 rounded-xl border flex flex-col items-center gap-2 text-center transition-all ${
                 active
-                  ? "bg-blue-600/20 border-blue-600/50 text-blue-400"
-                  : "bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-600"
+                  ? "bg-blue-50 border-blue-200 text-blue-700"
+                  : "bg-slate-100/60 border-slate-200 text-slate-500 hover:text-slate-700 hover:border-slate-200"
               }`}
             >
               <Icon size={18} />
@@ -173,7 +173,7 @@ export default function ReportsPage() {
 
       {/* Descrição do tipo selecionado */}
       {currentType && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 rounded-xl border border-slate-700/50">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-100/60 rounded-xl border border-slate-200">
           <currentType.icon size={14} className="text-blue-400" />
           <span className="text-slate-400 text-xs">{currentType.desc}</span>
         </div>
@@ -188,6 +188,18 @@ export default function ReportsPage() {
               <option value="">Selecione um veículo</option>
               {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
+          </div>
+          <div className="flex flex-wrap gap-1.5 items-end">
+            <span className="text-xs text-slate-400 mr-1">Periodo:</span>
+            {[
+              { label: "Hoje", fn: () => { const d=new Date().toISOString().split("T")[0]; setDateFrom(d); setDateTo(d); }},
+              { label: "Ontem", fn: () => { const d=new Date(Date.now()-86400000).toISOString().split("T")[0]; setDateFrom(d); setDateTo(d); }},
+              { label: "7 dias", fn: () => { const t=new Date().toISOString().split("T")[0]; const f=new Date(Date.now()-7*86400000).toISOString().split("T")[0]; setDateFrom(f); setDateTo(t); }},
+              { label: "30 dias", fn: () => { const t=new Date().toISOString().split("T")[0]; const f=new Date(Date.now()-30*86400000).toISOString().split("T")[0]; setDateFrom(f); setDateTo(t); }},
+            ].map(p => (
+              <button key={p.label} type="button" onClick={p.fn}
+                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-colors">{p.label}</button>
+            ))}
           </div>
           <div>
             <label className="label">Data Início</label>
@@ -233,7 +245,7 @@ export default function ReportsPage() {
       {/* Estado inicial */}
       {data === null && !loading && !error && (
         <div className="card p-12 text-center">
-          <div className="w-14 h-14 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <FileText size={28} className="text-slate-600" />
           </div>
           <p className="text-slate-400 text-sm font-medium">Selecione o veículo e o período</p>
